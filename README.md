@@ -18,11 +18,7 @@ Subtitle Generator is a tool designed to generate subtitles (SRT files) from aud
 
 ## Installation
 
-Clone this repository or download the source code. Install the required packages by running:
-
-```
-pip install -r requirements.txt
-```
+Clone this repository or download the source code. Install the required packages by running either `install_dependencies.cmd` or `install_dependencies.sh`.
 
 ## Usage
 
