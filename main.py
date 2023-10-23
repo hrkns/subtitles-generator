@@ -9,11 +9,43 @@ from pydub import AudioSegment
 from pydub.exceptions import CouldntDecodeError
 import whisper_timestamped as whisper
 import shutil
+import time
 
+start_time = time.time()
 TMP_DIR = "./tmp/"
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
+
+def seconds_to_formatted_string(total_seconds):
+    # Calculate the hours, minutes, and seconds.
+    hours = total_seconds // 3600  # Note: // is the integer division operator.
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+
+    # Construct the formatted string.
+    formatted_string = ""
+
+    # Add hours, if any.
+    if hours > 0:
+        formatted_string += f"{int(hours)} hours"
+
+    # Add minutes, if any.
+    if minutes > 0:
+        # Add a comma if there are already hours specified.
+        if formatted_string:
+            formatted_string += ", "
+        formatted_string += f"{int(minutes)} minutes"
+
+    # Add seconds, if any.
+    if seconds > 0 or (hours == 0 and minutes == 0):  # Add seconds if it's the only non-zero component.
+        # Add a comma if there are already hours or minutes specified.
+        if formatted_string:
+            formatted_string += ", "
+        formatted_string += f"{int(seconds)} seconds"
+
+    # Return the final formatted string.
+    return formatted_string
 
 def validate_audio_file(file_path):
     # TODO: Expand validation to support more audio formats.
@@ -144,6 +176,7 @@ def process_audio_segments(input_audio, segments_to_process, audio_language, mod
         audio_segment = input_audio[segment_start:segment_end]
 
         # Save the audio segment to a temporary file
+        # TODO: if a single segment is provided, don't create a temporary file, instead use the original input audio file directly, for optimization.
         logging.info("Creating tmp audio segment...")
         output_format = "mp3"
         if not os.path.exists(TMP_DIR):
@@ -406,14 +439,13 @@ if __name__ == "__main__":
     finally:
         shutil.rmtree(TMP_DIR)
         logging.info("Clean exit.")
+        logging.info(f"Total execution time: {seconds_to_formatted_string(time.time() - start_time)} seconds")
 
-# TODO: remove tmp folder after finishing processing
 # TODO: run process for sub segments and merge with existing srt and avoiding duplicate subtitles
 # TODO: read checkpoint/segments using pattern like "every 5 minutes" or "every 10 minutes"
 # TODO: modularize code
 # TODO: implement unit tests
-# TODO: create dependency installer script
-# TODO: print execution time
+# TODO: record demo video and put it in README.md (youtube link?)
 # TODO: when provided input is video, extract audio from it
 # TODO: clean input audio file
 # TODO: translate generated srt to other languages

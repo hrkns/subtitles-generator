@@ -27,6 +27,7 @@ The application is command-line based and can be initiated with specific paramet
 ### Mandatory Arguments:
 
 - `-i` or `--input`: The path to the input audio file in MP3 format. This argument is required.
+  - The final result will be more accurate if the input audio is clean and contains only voices. For cleaning audio before passing it to the tool, use software like **[UVR](https://github.com/Anjok07/ultimatevocalremovergui)**. As a future feature this audio cleaning will be integrated automatically into this tool. For now is a pending TODO.
 
 - `-o` or `--output`: The path where the SRT file will be saved. If only a directory path is provided, the application will save the output with a default name. If not provided at all, then the output location will be the same one as the input.
 
@@ -71,3 +72,11 @@ Contributions, issues, and feature requests are welcome!
 ## License
 
 [AGPL](https://www.gnu.org/licenses/agpl-3.0.en.html)
+
+## TODO
+
+- Allow other audio formats as input.
+- Allow video as input.
+- Automatically clean input audio before applying speech detection.
+- Enable translation of generated subtitles to other languages.
+- GUI that allows to do all the same operations and also save projects
