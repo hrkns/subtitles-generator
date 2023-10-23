@@ -8,6 +8,7 @@ import sys
 from pydub import AudioSegment
 from pydub.exceptions import CouldntDecodeError
 import whisper_timestamped as whisper
+import shutil
 
 TMP_DIR = "./tmp/"
 
@@ -41,7 +42,7 @@ def convert_to_ms(timestamp):
     multipliers = [1000, 60000, 3600000]  # multipliers for seconds, minutes, hours to milliseconds
     return sum(value * multiplier for value, multiplier in zip(parts, multipliers))
 
-def format_duration(ms):
+def format_duration(ms, use_separator=False):
     """
     Convert duration from milliseconds to a formatted string: "hh:mm:ss".
     
@@ -58,8 +59,10 @@ def format_duration(ms):
     hours, remainder = divmod(seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
 
+    separator = use_separator and ':' or ''  # Use ':' as separator if requested, otherwise use empty string.
+
     # Format the result as "hh:mm:ss"
-    formatted_duration = f"{hours:02}{minutes:02}{seconds:02}"
+    formatted_duration = f"{hours:02}{separator}{minutes:02}{separator}{seconds:02}"
 
     return formatted_duration
 
@@ -71,7 +74,7 @@ def parse_segments(segments_str, total_duration_ms):
     logging.info("Parsing segments...")
     segment_list = segments_str.split(',')
     for i, segment in enumerate(segment_list, start=1):
-        print(f"{i}: {segment.strip()}")
+        logging.info(f"{i}: {segment.strip()}")
 
     for index, segment in enumerate(segment_parts):
         segment = segment.strip()
@@ -135,7 +138,7 @@ def process_audio_segments(input_audio, segments_to_process, audio_language, mod
         # Convert the checkpoint to milliseconds
         segment_start = segment_to_process[0]
         segment_end = segment_to_process[1]
-        logging.info(f"Processing segment {segment_number} starting at {format_duration(segment_start)} and ending at {format_duration(segment_end)}")
+        logging.info(f"Processing segment {segment_number} starting at {format_duration(segment_start, use_separator=True)} and ending at {format_duration(segment_end, use_separator=True)}")
 
         # Create the audio segment
         audio_segment = input_audio[segment_start:segment_end]
@@ -180,9 +183,9 @@ def validate_and_order_checkpoints(checkpoints_str, total_audio_duration_ms):
     valid_time_format = re.compile(r'^(\d+:)?(\d+:)?\d+$')  # Pattern to match times in hh:mm:ss format where hh: and mm: are optional.
 
     # Print the received checkpoints in list format, indexed from 1.
-    print("Received checkpoints:")
+    logging.info("Received checkpoints:")
     for i, checkpoint in enumerate(checkpoint_strings, start=1):
-        print(f"{i}: {checkpoint.strip()}")
+        logging.info(f"{i}: {checkpoint.strip()}")
 
     checkpoints = []
     for checkpoint_str in checkpoint_strings:
@@ -288,37 +291,52 @@ def validate_output(path):
         if os.path.exists(path):
             logging.warning(f"The file {path} already exists and will be overwritten.")
 
-        return True  # Output directory exists, proceed with operation
+        return path
 
-def convert_to_srt_time(time, extra_time=None):
+def convert_to_srt_time(time):
     formatted_time = datetime.timedelta(seconds=time)
-    if extra_time:
-        extra_time_in_seconds = extra_time / 1000  # 'extra_time' is in milliseconds
-        extra_time_delta = datetime.timedelta(seconds=extra_time_in_seconds)
-        formatted_time += extra_time_delta  # add the extra time
     hours, remainder = divmod(formatted_time.seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
     hours += formatted_time.days * 24  # add days to hours if there are any
     milliseconds = formatted_time.microseconds // 1000
     return "{:02}:{:02}:{:02},{:03}".format(hours, minutes, seconds, milliseconds)
 
-def create_srt_content(json_file, extra_time_str=None, base_index=0):
-    extra_time = None
-    if extra_time_str:
-        extra_time = convert_to_ms(extra_time_str)
-    with open(json_file, 'r', encoding='utf-8') as file:
-        data = json.load(file)
-    segments = data['segments']
+def generate_subtitle_entry(index, start_time, end_time, text):
+    """Generate a subtitle entry."""
+    start_srt = convert_to_srt_time(start_time)
+    end_srt = convert_to_srt_time(end_time)
+    return f"{index}\n{start_srt} --> {end_srt}\n{text}\n\n"
+
+def create_srt_content(json_files):
+    segments = []
+    for json_file in json_files:
+        with open(f"{TMP_DIR}{json_file}", 'r', encoding='utf-8') as file:
+            data = json.load(file)
+            segments.extend(data['segments'])
+
+    index = 1
+    current_text = None
+    start_time = None
+    end_time = None
     entries = []
-    for i, segment in enumerate(segments):
-        # Apply extra time to start and end
-        start = convert_to_srt_time(segment['start'], extra_time)
-        end = convert_to_srt_time(segment['end'], extra_time)
-        text = segment['text']
-        entry = "{}\n{} --> {}\n{}\n".format(base_index + i + 1, start, end, text.strip())
-        entries.append(entry)
-    srt_content = "\n".join(entries)
-    return (srt_content, len(segments))
+
+    for segment in segments:
+        if current_text is not None and current_text != segment['text']:
+            entries.append(generate_subtitle_entry(index, start_time, end_time, current_text))
+            index += 1
+            current_text = segment['text']
+            start_time = segment['start']
+            end_time = segment['end']
+        else:
+            if current_text is None:
+                current_text = segment['text']
+                start_time = segment['start']
+            end_time = segment['end']
+
+    if current_text is not None:
+        entries.append(generate_subtitle_entry(index, start_time, end_time, current_text))
+
+    return ''.join(entries)
 
 def extract_time_from_filename(filename):
     """
@@ -345,62 +363,49 @@ def extract_time_from_filename(filename):
         return formatted_time
     else:
         # If the regex finds no match, there's a format mismatch. Handle as appropriate.
-        print("The filename does not match the expected format.")
+        logging.info("The filename does not match the expected format.")
         return None
 
 def process_directory(output_path):
-    directory_path = TMP_DIR
-
     # Gather all JSON files in the directory
-    json_files = sorted([file for file in os.listdir(directory_path) if file.endswith('.json')])
-
+    json_files = sorted([file for file in os.listdir(TMP_DIR) if file.endswith('.json')])
     logging.info(f"Found {len(json_files)} speech recognition JSON file(s) for processing.")
-
-    base_index = 0
-    previous_segment_end_time = "00:00:00"  # Initialize with zero for the first file.
-
     srt_output_file = open(output_path, 'w', encoding='utf-8')
 
-    for file_name in json_files:
-        file_path = os.path.join(directory_path, file_name)
-        
-        try:
-            logging.info(f"Processing speech recognition JSON file: {file_name}")
+    try:
+        logging.info(f"Processing speech recognition JSON files")
+        srt_content = create_srt_content(json_files)
+        srt_output_file.write(srt_content.strip())
+        logging.info(f"Completed processing speech recognition JSON files")
+    except Exception as e:
+        logging.error(f"An error occurred while processing speech recognition JSON files: {str(e)}", exc_info=True)
 
-            # Create SRT content and get the new index base
-            srt_content, num_segments_processed = create_srt_content(file_path, previous_segment_end_time, base_index)
-
-            srt_output_file.write(srt_content.strip() + "\n\n")
-
-            # Update for next iteration
-            base_index += num_segments_processed
-            previous_segment_end_time = extract_time_from_filename(file_name)
-
-            logging.info(f"Completed processing for file: {file_name}")
-        except Exception as e:
-            logging.error(f"An error occurred while processing file {file_name}: {str(e)}", exc_info=True)
-
+    logging.info(f"Writing to output file: {output_path}")
     srt_output_file.close()
 
     logging.info("All files have been processed.")
 
 def srt_generation(args):
-    output_path = args.output
+    output_path = args.output or os.path.dirname(args.input)
     output_path = validate_output(output_path)
     process_directory(output_path)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Process audio segments.")
-    parser.add_argument('-i', '--input', required=True, help="Input audio file (MP3 format).")
-    parser.add_argument('-c', '--checkpoints', type=str, help="Checkpoints, comma-separated, in format hh:mm:ss (hours and minutes optional).")
-    parser.add_argument('-s', '--segments', type=str, help="Segments to process in start-end format (00:50-13:57).")
-    parser.add_argument('-l', '--language', type=str, help="Language of the audio.")
-    parser.add_argument('-o', '--output', required=True, help="Output SRT file path (if no name is given and only a path, then a default name will be used).")
-    args = parser.parse_args()
-
-    speech_to_text(args)
-
-    srt_generation(args)
+    try:
+        parser = argparse.ArgumentParser(description="Process audio segments.")
+        parser.add_argument('-i', '--input', required=True, help="Input audio file (MP3 format).")
+        parser.add_argument('-c', '--checkpoints', type=str, help="Checkpoints, comma-separated, in format hh:mm:ss (hours and minutes optional).")
+        parser.add_argument('-s', '--segments', type=str, help="Segments to process in start-end format (00:50-13:57).")
+        parser.add_argument('-l', '--language', type=str, help="Language of the audio.")
+        parser.add_argument('-o', '--output', type=str, help="Output SRT file path (if no name is given and only a path, then a default name will be used). If not provided at all, then the output location will be the same one as the input.")
+        args = parser.parse_args()
+        speech_to_text(args)
+        srt_generation(args)
+    except Exception as e:
+        logging.error(f"An error occurred while processing the audio file: {str(e)}", exc_info=True)
+    finally:
+        shutil.rmtree(TMP_DIR)
+        logging.info("Clean exit.")
 
 # TODO: remove tmp folder after finishing processing
 # TODO: run process for sub segments and merge with existing srt and avoiding duplicate subtitles
