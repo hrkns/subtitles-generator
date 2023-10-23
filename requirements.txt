@@ -1,0 +1,7 @@
+# Requirements for the Subtitle Generator project
+
+# External Libraries
+pydub==0.25.1
+
+# Libraries installed from git with a specific commit
+-e git+https://github.com/linto-ai/whisper-timestamped@127e8b738756420487210490d09938593244b3dd#egg=whisper_timestamped
