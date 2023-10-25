@@ -1,51 +1,26 @@
+import sys
+sys.path.insert(1, './lib')
+
+from chronometer import Chronometer
+# Create and start the chronometer
+chrono = Chronometer()
+chrono.start()
+
 import argparse
 import json
 import datetime
 import re
 import os
 import logging
-import sys
 from pydub import AudioSegment
 from pydub.exceptions import CouldntDecodeError
 import whisper_timestamped as whisper
 import shutil
-import time
 
-start_time = time.time()
 TMP_DIR = "./tmp/"
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
-
-def seconds_to_formatted_string(total_seconds):
-    # Calculate the hours, minutes, and seconds.
-    hours = total_seconds // 3600  # Note: // is the integer division operator.
-    minutes = (total_seconds % 3600) // 60
-    seconds = total_seconds % 60
-
-    # Construct the formatted string.
-    formatted_string = ""
-
-    # Add hours, if any.
-    if hours > 0:
-        formatted_string += f"{int(hours)} hours"
-
-    # Add minutes, if any.
-    if minutes > 0:
-        # Add a comma if there are already hours specified.
-        if formatted_string:
-            formatted_string += ", "
-        formatted_string += f"{int(minutes)} minutes"
-
-    # Add seconds, if any.
-    if seconds > 0 or (hours == 0 and minutes == 0):  # Add seconds if it's the only non-zero component.
-        # Add a comma if there are already hours or minutes specified.
-        if formatted_string:
-            formatted_string += ", "
-        formatted_string += f"{int(seconds)} seconds"
-
-    # Return the final formatted string.
-    return formatted_string
 
 def validate_audio_file(file_path):
     # TODO: Expand validation to support more audio formats.
@@ -569,7 +544,8 @@ if __name__ == "__main__":
     finally:
         shutil.rmtree(TMP_DIR)
         logging.info("Clean exit.")
-        logging.info(f"Total execution time: {seconds_to_formatted_string(time.time() - start_time)} seconds")
+        chrono.stop()
+        chrono.print_duration()
 
 # TODO: modularize code
 # TODO: implement unit tests
