@@ -4,7 +4,7 @@ import logging
 import os
 import re
 import whisper_timestamped as whisper
-from modules import convert_hhmmss_to_ms, format_ms_duration, validate_audio_file, validate_output
+from modules import convert_hhmmss_to_ms, format_ms_duration, validate_audio_file
 
 TMP_DIR = "./tmp/"
 
@@ -239,8 +239,6 @@ def process_input(args):
         raise ValueError("Cannot specify both checkpoints and segments simultaneously.")
 
     input_audio = validate_audio_file(input_audio_path)
-
-    validate_output(output_path)
 
     # Get the total duration of the audio in milliseconds
     total_duration_ms = len(input_audio)
