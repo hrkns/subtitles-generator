@@ -1,4 +1,4 @@
-from modules import Chronometer, validate_audio_file
+from modules import Chronometer, validate_audio_file, convert_hhmmss_to_ms, format_ms_duration
 
 # Create and start the chronometer
 chrono = Chronometer()
@@ -18,40 +18,6 @@ TMP_DIR = "./tmp/"
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 
-def convert_to_ms(timestamp):
-    if timestamp is None:
-        return None
-
-    parts = list(map(int, timestamp.split(':')))
-    parts.reverse()  # Reverse to ensure hours are optional
-
-    multipliers = [1000, 60000, 3600000]  # multipliers for seconds, minutes, hours to milliseconds
-    return sum(value * multiplier for value, multiplier in zip(parts, multipliers))
-
-def format_duration(ms, use_separator=False):
-    """
-    Convert duration from milliseconds to a formatted string: "hh:mm:ss".
-    
-    :param ms: Duration in milliseconds.
-    :type ms: int
-    :return: Formatted duration.
-    :rtype: str
-    """
-    if ms < 0:
-        raise ValueError("Duration must be non-negative.")
-
-    # Convert milliseconds to seconds, then compute hours, minutes, and seconds
-    seconds = ms // 1000
-    hours, remainder = divmod(seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-
-    separator = use_separator and ':' or ''  # Use ':' as separator if requested, otherwise use empty string.
-
-    # Format the result as "hh:mm:ss"
-    formatted_duration = f"{hours:02}{separator}{minutes:02}{separator}{seconds:02}"
-
-    return formatted_duration
-
 def parse_segments(segments_str, total_duration_ms):
     segments = []
 
@@ -70,20 +36,20 @@ def parse_segments(segments_str, total_duration_ms):
                 # If the first segment starts with ':', it implies a start at 0.
                 start_ms = 0
                 end_str = segment.lstrip(':')  # Remove the ':' to get the end time.
-                end_ms = convert_to_ms(end_str) if end_str else total_duration_ms  # If no end time, use the audio duration.
+                end_ms = convert_hhmmss_to_ms(end_str) if end_str else total_duration_ms  # If no end time, use the audio duration.
             else:
                 start, sep, end = segment.partition('-')
                 if not sep or not end:
                     # If the separator '-' is not found or the end is not defined, this segment is malformed (excluding the last segment).
                     if index == len(segment_parts) - 1 and not sep:
                         # For the last segment, if there is no '-', consider the whole part as the start.
-                        start_ms = convert_to_ms(start)
+                        start_ms = convert_hhmmss_to_ms(start)
                         end_ms = total_duration_ms  # The end of the last segment is the audio duration.
                     else:
                         raise ValueError(f"Segment {index + 1} is malformed, segments (except the first and last) must have both start and end defined.")
                 else:
-                    start_ms = convert_to_ms(start)
-                    end_ms = convert_to_ms(end) if end else total_duration_ms  # If no end time, it's the audio duration.
+                    start_ms = convert_hhmmss_to_ms(start)
+                    end_ms = convert_hhmmss_to_ms(end) if end else total_duration_ms  # If no end time, it's the audio duration.
 
             if end_ms < start_ms:
                 raise ValueError(f"Segment {index + 1} ({segments_str[index + 1]}) is invalid as the end time is minor than the start time")
@@ -126,7 +92,7 @@ def process_audio_segments(input_audio, segments_to_process, audio_language, mod
         # Convert the checkpoint to milliseconds
         segment_start = segment_to_process[0]
         segment_end = segment_to_process[1]
-        logging.info(f"Processing segment {segment_number} starting at {format_duration(segment_start, use_separator=True)} and ending at {format_duration(segment_end, use_separator=True)}")
+        logging.info(f"Processing segment {segment_number} starting at {format_ms_duration(segment_start, use_separator=True)} and ending at {format_ms_duration(segment_end, use_separator=True)}")
 
         # Create the audio segment
         audio_segment = input_audio[segment_start:segment_end]
@@ -148,7 +114,7 @@ def process_audio_segments(input_audio, segments_to_process, audio_language, mod
         logging.info("Transformed speech segment to text. Writing to tmp JSON file...")
 
         # Save the result to a JSON file
-        output_json_file = output_json_template.format(format_duration(segment_start) + "_" + format_duration(segment_end))
+        output_json_file = output_json_template.format(format_ms_duration(segment_start) + "_" + format_ms_duration(segment_end))
         with open(output_json_file, 'w', encoding='utf-8') as file:
             json.dump(result, file, ensure_ascii=False, indent=2)
         logging.info(f'Content has been written to the file {output_json_file}')
@@ -234,7 +200,7 @@ def validate_and_order_checkpoints(checkpoints_str, total_audio_duration_ms):
                 raise ValueError(f"Invalid time format for checkpoint '{checkpoint_str}'. Expected format is hh:mm:ss, where 'ss' is mandatory and others are optional.")
 
             # Convert the checkpoint to a comparable format, ensuring it's within the audio duration bounds.
-            checkpoint_ms = convert_to_ms(checkpoint_str)
+            checkpoint_ms = convert_hhmmss_to_ms(checkpoint_str)
             if checkpoint_ms < 0 or checkpoint_ms > total_audio_duration_ms:
                 raise ValueError(f"Checkpoint '{checkpoint_str}' is out of bounds. Valid checkpoints range from 00:00:00 to {max_time_str}.")
 
@@ -255,7 +221,7 @@ def generate_segments_from_checkpoints(checkpoints, total_duration_ms):
     checkpoints = validate_and_order_checkpoints(checkpoints, total_duration_ms)
 
     # Convert checkpoint times to a list of milliseconds
-    checkpoints = [convert_to_ms(cp) for cp in checkpoints]
+    checkpoints = [convert_hhmmss_to_ms(cp) for cp in checkpoints]
     
     # Add the start of the first segment (0 ms)
     segments_to_process.append((0, checkpoints[0]))
