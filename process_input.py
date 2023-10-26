@@ -5,6 +5,9 @@ import os
 import re
 import sys
 import magic
+import torchaudio
+from speechbrain.pretrained import SepformerSeparation as separator
+import soundfile as sf
 from moviepy.editor import AudioFileClip
 import whisper_timestamped as whisper
 from pydub import AudioSegment
@@ -32,6 +35,31 @@ def validate_audio_file(file_path):
     except CouldntDecodeError:
         logging.error("Could not decode audio file. Please ensure it's a valid MP3 file.")
         sys.exit(1)
+
+def speech_enhancement(input_audio, speech_enhacement_model):
+    # Enhance your loaded audio
+    logging.info("Enhancing audio...")
+    enhanced_signal = speech_enhacement_model.separate_file(input_audio)
+
+    # Write the enhanced signal to a new file
+    # Note: soundfile does not support MP3.
+    logging.info("Writing enhanced audio to file...")
+    wav_clean_audio = TMP_DIR + "enhanced_audio.wav"
+    torchaudio.save(wav_clean_audio, enhanced_signal[:, :, 0].detach().cpu(), 16000)
+
+    # Convert the enhanced audio to MP3
+    # Note: pydub does not support MP3.
+    logging.info("Converting enhanced audio to MP3...")
+    mp3_clean_audio = TMP_DIR + "enhanced_audio.mp3"
+    AudioSegment.from_wav(wav_clean_audio).export(mp3_clean_audio, format="mp3")
+
+    # delete the temporary wav file
+    logging.info("Deleting temporary WAV file...")
+    os.remove(wav_clean_audio)
+
+    # return the enhanced audio
+    logging.info("Returning enhanced audio...")
+    return mp3_clean_audio
 
 def is_video_file(file_path):
     """
@@ -133,7 +161,7 @@ def parse_segments(segments_str, total_duration_ms):
 
     return segments
 
-def process_audio_segments(input_audio, segments_to_process, audio_language, speech_to_text_model, output_json_template):
+def process_audio_segments(input_audio, segments_to_process, audio_language, speech_enhacement_model, speech_to_text_model, output_json_template):
     # This function assumes the existence of a 'whisper' module and 'model' variable.
     # These are not standard Python or known third-party libraries as of the last update in 2022.
     # Ensure your environment contains these, or replace them with the actual modules and methods you're using for audio processing.
@@ -156,6 +184,11 @@ def process_audio_segments(input_audio, segments_to_process, audio_language, spe
         temp_audio_file = f"{TMP_DIR}temp_segment_{segment_number}.{output_format}"
         audio_segment.export(temp_audio_file, format=output_format)
         logging.info("Created temporary audio segment.")
+
+        # Enhance the audio segment
+        logging.info("Enhancing audio segment...")
+        temp_audio_file = speech_enhancement(temp_audio_file, speech_enhacement_model)
+        logging.info("Enhanced audio segment.")
 
         # Transcribe the audio segment
         logging.info("Transforming speech segment to text...")
@@ -325,6 +358,17 @@ def process_input(args):
         # If no segments/checkpoints, process entire audio
         segments_to_process = [(0, total_duration_ms)]
 
+    # Load the model from the SpeechBrain repository
+    # This model is designed for spectral mask enhancement for noise reduction.
+    logging.info("Loading speech enhancement model...")
+    speech_enhacement_model = separator.from_hparams(
+        # TODO: be able to specify the sppech enhancement model to use in the command line
+        source="speechbrain/sepformer-wham16k-enhancement",
+        savedir=os.path.abspath(TMP_DIR),
+        # TODO: be able to specify the device to use in the command line, if cpu or gpu
+        run_opts={"device":"cuda"}
+    )
+
     # Load the speech recognition model
     logging.info("Loading speech recognition model...")
     # TODO: be able to specify the model to use in the command line
@@ -335,4 +379,4 @@ def process_input(args):
     # The speech to text result for each segment will be saved to a JSON file.
     # The content of the generated JSON files is used then in the generate_output.py script as input to generate the final subtitles output.
     output_json_template = TMP_DIR + "speech_recognition_result_segment_{}.json"
-    process_audio_segments(input_audio, segments_to_process, audio_language, speech_to_text_model, output_json_template)
+    process_audio_segments(input_audio, segments_to_process, audio_language, speech_enhacement_model, speech_to_text_model, output_json_template)
