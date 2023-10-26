@@ -27,7 +27,8 @@ The application is command-line based and can be initiated with specific paramet
 ### Mandatory Arguments:
 
 - `-i` or `--input`: The path to the input audio file in MP3 format or video format. This argument is required.
-  - If audio is provided, then the final result will be more accurate if the input audio is clean and contains only voices. For cleaning audio before passing it to the tool, use software like **[UVR](https://github.com/Anjok07/ultimatevocalremovergui)**. As a future feature this audio cleaning will be integrated automatically into this tool. For now is a pending TODO.
+  - If audio is provided, then the final result will be more accurate if the input audio is clean and contains only voices. For cleaning audio before passing it to the tool, use software like **[UVR](https://github.com/Anjok07/ultimatevocalremovergui)**. As a future feature this audio cleaning will be integrated automatically into this tool. For now is WIP in the following branches:
+    - [Enhacement of input speech using SpeechBrain](https://github.com/hrkns/subtitle-generator/tree/v0.1.x-speech-enhacement-using-speechbrain).
 
 - `-o` or `--output`: The path where the SRT file will be saved. If only a directory path is provided, the application will save the output with a default name. If not provided at all, then the output location will be the same one as the input.
 
