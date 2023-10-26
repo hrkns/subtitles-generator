@@ -9,9 +9,8 @@ from moviepy.editor import AudioFileClip
 import whisper_timestamped as whisper
 from pydub import AudioSegment
 from pydub.exceptions import CouldntDecodeError
+from config import TMP_DIR
 from modules import convert_hhmmss_to_ms, format_ms_duration
-
-TMP_DIR = "./tmp/"
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)

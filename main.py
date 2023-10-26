@@ -1,6 +1,7 @@
 import logging
 import os
 import shutil
+from config import TMP_DIR
 from modules import Chronometer, execution_args
 from process_input import process_input
 from generate_output import generate_output
@@ -8,8 +9,6 @@ from generate_output import generate_output
 # Create and start the chronometer
 chrono = Chronometer()
 chrono.start()
-
-TMP_DIR = "./tmp/"
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)

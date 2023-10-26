@@ -4,7 +4,7 @@ import json
 import os
 import re
 
-TMP_DIR = "./tmp/"
+from config import TMP_DIR
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
