@@ -1,6 +1,6 @@
 # Subtitle Generator
 
-Subtitle Generator is a tool designed to generate subtitles (SRT files) from audio files (MP3 format). It leverages advanced processing to interpret audio content and create time-stamped subtitles that can be used for a wide range of applications. It's built onto the **[`whisper_timestamped`](https://github.com/linto-ai/whisper-timestamped)** package.
+Subtitle Generator is a tool designed to generate subtitles (SRT files) from audio files (MP3 format) or video files. It leverages advanced processing to interpret audio content and create time-stamped subtitles that can be used for a wide range of applications. It's built onto the **[`whisper_timestamped`](https://github.com/linto-ai/whisper-timestamped)** package.
 
 ## Features
 
