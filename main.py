@@ -15,7 +15,10 @@ logging.basicConfig(level=logging.INFO)
 
 if __name__ == "__main__":
     try:
+        # Parse execution arguments
         args = execution_args()
+
+        # Run the program or print the version
         if not args.version:
             process_input(args)
             generate_output(args)
@@ -24,9 +27,13 @@ if __name__ == "__main__":
     except Exception as e:
         logging.error(f"An error occurred while running process: {str(e)}", exc_info=True)
     finally:
+        # Clean up the temporary directory
         if os.path.exists(TMP_DIR):
             shutil.rmtree(TMP_DIR)
+
         logging.info("Clean exit.")
+
+        # Stop the chronometer and print the duration
         chrono.stop()
         chrono.print_duration()
 

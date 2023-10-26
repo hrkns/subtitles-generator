@@ -159,7 +159,11 @@ def process_audio_segments(input_audio, segments_to_process, audio_language, spe
         # Transcribe the audio segment
         logging.info("Transforming speech segment to text...")
         segment_audio = whisper.load_audio(temp_audio_file)
-        result = whisper.transcribe(speech_to_text_model, segment_audio, language=audio_language)
+        logging.info("Loaded audio segment. Transcribing...")
+        try:
+            result = whisper.transcribe(speech_to_text_model, segment_audio, language=audio_language)
+        except Exception as e:
+            raise RuntimeError(f"An error occurred while transcribing the audio segment #{segment_number}: {str(e)}")
         logging.info("Transformed speech segment to text. Writing to tmp JSON file...")
 
         # Save the result to a JSON file
