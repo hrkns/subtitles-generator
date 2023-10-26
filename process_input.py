@@ -133,7 +133,7 @@ def parse_segments(segments_str, total_duration_ms):
 
     return segments
 
-def process_audio_segments(input_audio, segments_to_process, audio_language, speech_enhacement_model, output_json_template):
+def process_audio_segments(input_audio, segments_to_process, audio_language, speech_to_text_model, output_json_template):
     # This function assumes the existence of a 'whisper' module and 'model' variable.
     # These are not standard Python or known third-party libraries as of the last update in 2022.
     # Ensure your environment contains these, or replace them with the actual modules and methods you're using for audio processing.
@@ -160,7 +160,7 @@ def process_audio_segments(input_audio, segments_to_process, audio_language, spe
         # Transcribe the audio segment
         logging.info("Transforming speech segment to text...")
         segment_audio = whisper.load_audio(temp_audio_file)
-        result = whisper.transcribe(speech_enhacement_model, segment_audio, language=audio_language)
+        result = whisper.transcribe(speech_to_text_model, segment_audio, language=audio_language)
         logging.info("Transformed speech segment to text. Writing to tmp JSON file...")
 
         # Save the result to a JSON file
@@ -328,11 +328,11 @@ def process_input(args):
     # Load the speech recognition model
     logging.info("Loading speech recognition model...")
     # TODO: be able to specify the model to use in the command line
-    speech_enhacement_model = whisper.load_model("tiny")
+    speech_to_text_model = whisper.load_model("tiny")
     logging.info("Speech recognition model loaded.")
 
     # Process the audio segments
     # The speech to text result for each segment will be saved to a JSON file.
     # The content of the generated JSON files is used then in the generate_output.py script as input to generate the final subtitles output.
     output_json_template = TMP_DIR + "speech_recognition_result_segment_{}.json"
-    process_audio_segments(input_audio, segments_to_process, audio_language, speech_enhacement_model, output_json_template)
+    process_audio_segments(input_audio, segments_to_process, audio_language, speech_to_text_model, output_json_template)
