@@ -292,6 +292,9 @@ def process_input(args):
     input_path = args.input
     audio_language = args.language or 'en'
 
+    if not input_path:
+        raise ValueError("Input file path is required.")
+
     # checkpoints and segments are mutually exclusive
     if checkpoints and segments:
         raise ValueError("Cannot specify both checkpoints and segments simultaneously.")

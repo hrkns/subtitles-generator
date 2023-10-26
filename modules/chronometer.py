@@ -1,5 +1,7 @@
-# chronometer.py
+import logging
 import time
+
+logging.basicConfig(level=logging.INFO)
 
 def seconds_to_formatted_string(total_seconds):
     # Calculate the hours, minutes, and seconds.
@@ -59,5 +61,5 @@ class Chronometer:
 
     def print_duration(self):
         """Print the duration in a human-readable format."""
-        print(f"Total execution time: {seconds_to_formatted_string(self.get_duration())}")
+        logging.info(f"Total execution time: {seconds_to_formatted_string(self.get_duration())}")
 

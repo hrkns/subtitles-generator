@@ -17,8 +17,11 @@ logging.basicConfig(level=logging.INFO)
 if __name__ == "__main__":
     try:
         args = execution_args()
-        process_input(args)
-        generate_output(args)
+        if not args.version:
+            process_input(args)
+            generate_output(args)
+        else:
+            logging.info("Version 0.1.0")
     except Exception as e:
         logging.error(f"An error occurred while running process: {str(e)}", exc_info=True)
     finally:
