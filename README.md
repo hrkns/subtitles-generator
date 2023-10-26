@@ -16,7 +16,7 @@ Subtitle Generator is a tool designed to generate subtitles (SRT files) from aud
 
 ## Installation
 
-- This application relies on **[`whisper_timestamped`](https://github.com/linto-ai/whisper-timestamped)** for working properly so refer to its [installation](https://github.com/linto-ai/whisper-timestamped#installation) instructions for enabling it into the system.
+- This application relies on **[`whisper_timestamped`](https://github.com/linto-ai/whisper-timestamped)** (among other packages) for working properly so refer to its [installation](https://github.com/linto-ai/whisper-timestamped#installation) instructions for enabling it into the system.
 
 - Clone this repository or download the source code. Install the other required packages by running either `install_dependencies.cmd` or `install_dependencies.sh`.
 
