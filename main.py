@@ -1,4 +1,5 @@
 import logging
+import os
 import shutil
 from modules import Chronometer, execution_args
 from process_input import process_input
@@ -21,7 +22,8 @@ if __name__ == "__main__":
     except Exception as e:
         logging.error(f"An error occurred while running process: {str(e)}", exc_info=True)
     finally:
-        shutil.rmtree(TMP_DIR)
+        if os.path.exists(TMP_DIR):
+            shutil.rmtree(TMP_DIR)
         logging.info("Clean exit.")
         chrono.stop()
         chrono.print_duration()

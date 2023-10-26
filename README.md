@@ -95,8 +95,8 @@ Contributions, issues, and feature requests are welcome!
 
 ## TODO
 
-- Allow other audio formats as input.
 - Automatically clean input audio before applying speech detection.
+- Allow other audio formats as input.
 - Enable translation of generated subtitles to other languages.
 - GUI that allows to do all the same operations and also save projects
 - Be able to specify in the input arguments the model to be used by whisper for speech to text process
