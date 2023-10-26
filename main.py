@@ -26,8 +26,8 @@ if __name__ == "__main__":
         chrono.stop()
         chrono.print_duration()
 
+# TODO: when provided input is video, extract audio from it
 # TODO: implement unit tests
 # TODO: record demo video and put it in README.md (youtube link?)
-# TODO: when provided input is video, extract audio from it
 # TODO: clean input audio file
 # TODO: translate generated srt to other languages
