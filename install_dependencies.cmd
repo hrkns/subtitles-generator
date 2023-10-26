@@ -1,1 +1,1 @@
-pip install pydub
+pip install pydub python-magic moviepy
