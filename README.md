@@ -35,6 +35,8 @@ python gui.py
 
 In the GUI, you can easily set the input file and the output path. Once all parameters are set, simply click the 'Generate' button to start the subtitle creation process. All the other arguments used in the CLI option will be translated into proper GUI controls in the future.
 
+![Alt text](assets/img/gui.png)
+
 ### Using the Command Line
 
 The application can also be initiated with specific parameters detailed below:
