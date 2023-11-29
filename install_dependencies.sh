@@ -1,1 +1,1 @@
-pip install pydub python-magic moviepy
+pip install pydub python-magic moviepy pyqt5

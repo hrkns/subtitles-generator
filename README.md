@@ -1,6 +1,6 @@
-# Subtitle Generator
+# Subtitles Generator
 
-Subtitle Generator is a tool designed to generate subtitles (SRT files) from audio files (MP3 format) or video files. It leverages advanced processing to interpret audio content and create time-stamped subtitles that can be used for a wide range of applications. It's built onto the **[`whisper_timestamped`](https://github.com/linto-ai/whisper-timestamped)** package.
+Subtitles Generator is a versatile tool designed to generate subtitles (SRT files) from audio files (MP3 format) or video files. It leverages advanced processing to interpret audio content and create time-stamped subtitles suitable for various applications. This tool is built on the **[`whisper_timestamped`](https://github.com/linto-ai/whisper-timestamped)** package and now includes a user-friendly graphical user interface (GUI) for easier operation.
 
 ## Features
 
@@ -9,6 +9,7 @@ Subtitle Generator is a tool designed to generate subtitles (SRT files) from aud
 - Ability to specify specific audio segments for processing.
 - Language specification for the audio content.
 - Control over the output file path and naming.
+- Graphical User Interface (GUI) for simplified operation.
 
 ## Requirements
 
@@ -16,21 +17,37 @@ Subtitle Generator is a tool designed to generate subtitles (SRT files) from aud
 
 ## Installation
 
-- This application relies on **[`whisper_timestamped`](https://github.com/linto-ai/whisper-timestamped)** (among other packages) for working properly so refer to its [installation](https://github.com/linto-ai/whisper-timestamped#installation) instructions for enabling it into the system.
+- This application relies on **[`whisper_timestamped`](https://github.com/linto-ai/whisper-timestamped)** (among other packages) for proper functionality. Refer to its [installation](https://github.com/linto-ai/whisper-timestamped#installation) instructions for enabling it into the system.
 
 - Clone this repository or download the source code. Install the other required packages by running either `install_dependencies.cmd` or `install_dependencies.sh`.
 
 ## Usage
 
-The application is command-line based and can be initiated with specific parameters detailed below:
+The application can be used in two ways: through the command line or via the graphical user interface (GUI).
 
-### Mandatory Arguments:
+### Using the GUI
+
+For a more user-friendly experience, especially for those not comfortable with command-line operations, the Subtitles Generator includes a GUI. To open the GUI, run:
+
+```
+python gui.py
+```
+
+In the GUI, you can easily set the input file and the output path. Once all parameters are set, simply click the 'Generate' button to start the subtitle creation process. All the other arguments used in the CLI option will be translated into proper GUI controls in the future.
+
+![Alt text](assets/img/gui.png)
+
+### Using the Command Line
+
+The application can also be initiated with specific parameters detailed below:
+
+#### Mandatory Arguments:
 
 - `-i` or `--input`: The path to the input audio file in MP3 format or video format. This argument is required.
   - If audio is provided, then the final result will be more accurate if the input audio is clean and contains only voices. For cleaning audio before passing it to the tool, use software like **[UVR](https://github.com/Anjok07/ultimatevocalremovergui)**. As a future feature this audio cleaning will be integrated automatically into this tool. For now is WIP in the following branches:
     - [Enhacement of input speech using SpeechBrain](https://github.com/hrkns/subtitle-generator/tree/v0.1.x-speech-enhacement-using-speechbrain).
 
-### Optional Arguments:
+#### Optional Arguments:
 
 - `-o` or `--output`: The path where the SRT file will be saved. If only a directory path is provided, the application will save the output with a default name. If not provided at all, then the output location will be the same one as the input.
 
@@ -97,7 +114,8 @@ Contributions, issues, and feature requests are welcome!
 ## TODO
 
 - Automatically clean input audio before applying speech detection.
+- Add features to GUI for manipulating and customizing the output of the process.
 - Allow other audio formats as input.
 - Enable translation of generated subtitles to other languages.
-- GUI that allows to do all the same operations and also save projects
-- Be able to specify in the input arguments the model to be used by whisper for speech to text process
+- Be able to specify in the input arguments the model to be used by whisper for speech to text process.
+- Create EXE file to be distributed.
