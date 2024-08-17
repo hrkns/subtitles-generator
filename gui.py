@@ -82,8 +82,11 @@ class SubtitlesGeneratorGUI(QWidget):
 
         # Load cached paths
         self.cache = shelve.open(".cache")
-        self.lastInputPath = self.cache.get("lastInputPath", "")
         self.lastOutputPath = self.cache.get("lastOutputPath", "")
+        try:
+            self.lastInputPath = self.cache.get("lastInputPath", "")
+        except Exception as e:
+            self.lastInputPath = ""
 
     def select_file(self):
         # File selection dialog
