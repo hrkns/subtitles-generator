@@ -146,7 +146,7 @@ class SubtitlesGeneratorGUI(QWidget):
         self.btnCancelScript.show()
 
         # Prepare and start the script execution thread
-        command = ["python", "main.py", "--input", self.selectedFile, "--output", self.outputPath, "--checkpoints", "20s"]
+        command = ["python", "main.py", "--input", self.selectedFile, "--output", self.outputPath, "--checkpoints", "30s"]
         self.worker = Worker(command)
         self.worker.output.connect(self.logTextEdit.append)
         self.worker.finished.connect(self.script_finished)
