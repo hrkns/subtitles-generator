@@ -125,17 +125,29 @@ def save_translated_srt(translated_segments, output_file):
     logging.info(f"Translation saved successfully to '{output_file}'")
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        logging.error("Usage: python srt_translation.py <srt_file>")
+    if len(sys.argv) < 4:
+        logging.error("Usage: python srt_translator.py <srt_file> <source_language> <target_language>")
         sys.exit(1)
 
     srt_file = sys.argv[1]
+    source_language = sys.argv[2]
+    target_language = sys.argv[3]
+
+    # Validate the languages
+    valid_languages = ["en", "es"]
+    if source_language not in valid_languages or target_language not in valid_languages:
+        logging.error(f"Invalid language. Only 'en' (English) and 'es' (Spanish) are allowed.")
+        sys.exit(1)
+
+    if source_language == target_language:
+        logging.error("Source and target languages cannot be the same.")
+        sys.exit(1)
 
     if not os.path.isfile(srt_file):
         logging.error(f"Error: File '{srt_file}' does not exist.")
         sys.exit(1)
 
-    logging.info(f"Processing file '{srt_file}'")
+    logging.info(f"Processing file '{srt_file}' from '{source_language}' to '{target_language}'")
     srt_content = read_srt(srt_file)
     segments = compress_and_split_srt(srt_content)
     translated_segments = translate_segments(segments)
