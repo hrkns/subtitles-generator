@@ -82,8 +82,14 @@ class SubtitlesGeneratorGUI(QWidget):
 
         # Load cached paths
         self.cache = shelve.open(".cache")
-        self.lastInputPath = self.cache.get("lastInputPath", "")
-        self.lastOutputPath = self.cache.get("lastOutputPath", "")
+        try:
+            self.lastInputPath = self.cache.get("lastInputPath", "")
+        except Exception as e:
+            self.lastInputPath = ""
+        try:
+            self.lastOutputPath = self.cache.get("lastOutputPath", "")
+        except Exception as e:
+            self.lastOutputPath = ""
 
     def select_file(self):
         # File selection dialog
@@ -140,7 +146,7 @@ class SubtitlesGeneratorGUI(QWidget):
         self.btnCancelScript.show()
 
         # Prepare and start the script execution thread
-        command = ["python", "main.py", "--input", self.selectedFile, "--output", self.outputPath, "--checkpoints", "20s"]
+        command = ["python", "main.py", "--input", self.selectedFile, "--output", self.outputPath, "--checkpoints", "30s"]
         self.worker = Worker(command)
         self.worker.output.connect(self.logTextEdit.append)
         self.worker.finished.connect(self.script_finished)
