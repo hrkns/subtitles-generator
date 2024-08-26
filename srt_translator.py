@@ -4,7 +4,6 @@ import os
 import logging
 import time
 
-# Setup logging configuration
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def read_srt(file_path):
@@ -23,22 +22,19 @@ def read_srt(file_path):
 def compress_and_split_srt(srt_content, max_chars=4000):
     """Compresses and splits SRT content into segments."""
     logging.info("Compressing and splitting the SRT content into segments.")
-    blocks = re.split(r'\n\n', srt_content.strip())  # Split the subtitles into blocks
+    blocks = re.split(r'\n\n', srt_content.strip())
     segments = []
 
     for block in blocks:
         lines = block.split('\n')
         if len(lines) >= 3:
-            # Extract the start and end times
             times = lines[1]
             start, end = times.split(' --> ')
             start_millis = sum(x * int(t) for x, t in zip([3600000, 60000, 1000, 1], re.split(r'[:,]', start)))
             end_millis = sum(x * int(t) for x, t in zip([3600000, 60000, 1000, 1], re.split(r'[:,]', end)))
 
-            # Extract and process the subtitle text
             content = ' '.join(lines[2:]).replace('\n', '<br>').replace('|', '')
-            
-            # Append the segment to the list
+
             segments.append({
                 "start_time": start_millis,
                 "end_time": end_millis,
@@ -48,8 +44,13 @@ def compress_and_split_srt(srt_content, max_chars=4000):
     logging.info(f"Total segments created: {len(segments)}")
     return segments
 
-def translate_segments(segments, model_name='Helsinki-NLP/opus-mt-en-es'):
+def time_to_seconds(t):
+    """Converts a struct_time object to total seconds since midnight."""
+    return t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec
+
+def translate_segments(segments, conversation_intervals, source_language, target_language):
     """Translates the text of each segment using a specified translation model."""
+    model_name = f'Helsinki-NLP/opus-mt-{source_language}-{target_language}'
     logging.info(f"Loading translation model '{model_name}'")
     from transformers import MarianMTModel, MarianTokenizer
 
@@ -57,51 +58,50 @@ def translate_segments(segments, model_name='Helsinki-NLP/opus-mt-en-es'):
     model = MarianMTModel.from_pretrained(model_name)
 
     translated_segments = []
-
     start_time = time.time()
     total_segments = len(segments)
     logging.info(f"Translating {total_segments} segments...")
+    idx = -1
+    segments_len = len(segments)
 
-    logging.info("Translating segments...")
-    for idx, segment in enumerate(segments):
+    while idx < segments_len - 1:
+        idx += 1
+        segment = segments[idx]
+        logging.info(f"Processing segment {idx + 1} of {total_segments}...")
+        segment_start_seconds = time_to_seconds(time.gmtime(segment['start_time'] / 1000))
+        segment_end_seconds = time_to_seconds(time.gmtime(segment['end_time'] / 1000))
         src_text = [segment['text']]
-        
-        # Start translation time
-        segment_start_time = time.time()
-        
-        translated = model.generate(**tokenizer(src_text, return_tensors="pt", padding=True))
-        translated_text = tokenizer.decode(translated[0], skip_special_tokens=True)
-        
-        translated_segments.append({
-            "start_time": segment['start_time'],
-            "end_time": segment['end_time'],
-            "text": translated_text.replace('<br>', '\n')  # Replace back '<br>' with newlines
-        })
 
-        # Calculate progress
+        for interval in conversation_intervals:
+            interval_start_seconds = time_to_seconds(interval['start'])
+            interval_end_seconds = time_to_seconds(interval['end'])
+            if interval_start_seconds <= segment_start_seconds and segment_end_seconds <= interval_end_seconds:
+                logging.info(f"Segment {idx + 1} is within the conversation interval {time.strftime('%H:%M:%S', interval['start'])} - {time.strftime('%H:%M:%S', interval['end'])}")
+                while (idx + 1 < total_segments):
+                    next_segment = segments[idx + 1]
+                    next_segment_start_seconds = time_to_seconds(time.gmtime(next_segment['start_time'] / 1000))
+                    if interval_start_seconds <= next_segment_start_seconds <= interval_end_seconds:
+                        src_text.append(next_segment['text'])
+                        idx += 1
+                    else:
+                        logging.info(f"Conversation interval ended at segment {idx + 1}")
+                        break
+                break
+
+        translated = model.generate(**tokenizer(src_text, return_tensors="pt", padding=True))
+        translated_texts = tokenizer.batch_decode(translated, skip_special_tokens=True)
+
+        for i, text in enumerate(translated_texts):
+            translated_segments.append({
+                "start_time": segments[idx - len(translated_texts) + i + 1]['start_time'],
+                "end_time": segments[idx - len(translated_texts) + i + 1]['end_time'],
+                "text": text.replace('<br>', '\n')
+            })
+
         elapsed_time = time.time() - start_time
         percentage_done = (idx + 1) / total_segments * 100
-        estimated_total_time = elapsed_time / (idx + 1) * total_segments
-        estimated_remaining_time = estimated_total_time - elapsed_time
-        
-        # Format times
-        elapsed_time_str = time.strftime("%H:%M:%S", time.gmtime(elapsed_time))
-        estimated_remaining_time_str = time.strftime("%H:%M:%S", time.gmtime(estimated_remaining_time))
-        segment_start_time_str = time.strftime("%H:%M:%S", time.gmtime(segment_start_time))
-        segment_end_time_str = time.strftime("%H:%M:%S", time.gmtime(time.time()))
+        logging.info(f"Translated {idx + 1}/{total_segments} segments ({percentage_done:.2f}%) - Elapsed time: {time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}")
 
-        # Log the progress, original text, and translated text
-        sys.stdout.write(f"\rTranslating segment {idx + 1}/{total_segments} "
-                        f"({percentage_done:.2f}% done) - "
-                        f"Elapsed: {elapsed_time_str} - "
-                        f"Remaining: {estimated_remaining_time_str} - "
-                        f"Started: {segment_start_time_str} - "
-                        f"Ended: {segment_end_time_str}\n"
-                        f"Original: {segment['text'][:50]}... "
-                        f"Translated: {translated_text[:50]}... ")
-        sys.stdout.flush()
-
-    print()
     logging.info("Translation completed.")
     return translated_segments
 
@@ -124,24 +124,39 @@ def save_translated_srt(translated_segments, output_file):
 
     logging.info(f"Translation saved successfully to '{output_file}'")
 
+def parse_conversation_intervals(intervals_input):
+    """Parses and validates the conversation intervals input."""
+    intervals = []
+    for interval in intervals_input.split(','):
+        try:
+            start, end = interval.split('-')
+            start_time = time.strptime(start, "%H:%M:%S")
+            end_time = time.strptime(end, "%H:%M:%S")
+
+            if start_time > end_time:
+                raise ValueError(f"Start time {start} is after end time {end} in interval {interval}.")
+
+            intervals.append({
+                "start": start_time,
+                "end": end_time
+            })
+        except ValueError as e:
+            logging.error(f"Invalid interval format: {e}")
+            sys.exit(1)
+
+    return intervals
+
 if __name__ == "__main__":
-    if len(sys.argv) < 4:
-        logging.error("Usage: python srt_translator.py <srt_file> <source_language> <target_language>")
+    if len(sys.argv) < 5:
+        logging.error("Usage: python srt_translation.py <srt_file> <source_language> <target_language> <conversation_intervals>")
         sys.exit(1)
 
     srt_file = sys.argv[1]
     source_language = sys.argv[2]
     target_language = sys.argv[3]
+    conversation_intervals_input = sys.argv[4]
 
-    # Validate the languages
-    valid_languages = ["en", "es"]
-    if source_language not in valid_languages or target_language not in valid_languages:
-        logging.error(f"Invalid language. Only 'en' (English) and 'es' (Spanish) are allowed.")
-        sys.exit(1)
-
-    if source_language == target_language:
-        logging.error("Source and target languages cannot be the same.")
-        sys.exit(1)
+    conversation_intervals = parse_conversation_intervals(conversation_intervals_input)
 
     if not os.path.isfile(srt_file):
         logging.error(f"Error: File '{srt_file}' does not exist.")
@@ -150,7 +165,7 @@ if __name__ == "__main__":
     logging.info(f"Processing file '{srt_file}' from '{source_language}' to '{target_language}'")
     srt_content = read_srt(srt_file)
     segments = compress_and_split_srt(srt_content)
-    translated_segments = translate_segments(segments)
+    translated_segments = translate_segments(segments, conversation_intervals, source_language, target_language)
 
     output_file = os.path.splitext(srt_file)[0] + ".translated.srt"
     save_translated_srt(translated_segments, output_file)
