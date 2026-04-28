@@ -25,6 +25,8 @@ Subtitles Generator is a versatile tool designed to generate subtitles (SRT file
 
 The application can be used in two ways: through the command line or via the graphical user interface (GUI).
 
+The audio-cleaning work for this branch is being specified in [Audio Cleaning Behavior Contract](docs/audio-cleaning-behavior-contract.md).
+
 ### Using the GUI
 
 For a more user-friendly experience, especially for those not comfortable with command-line operations, the Subtitles Generator includes a GUI. To open the GUI, run:
@@ -114,9 +116,10 @@ Contributions, issues, and feature requests are welcome!
 ## TODO
 
 - Automatically clean input audio before applying speech detection.
+- Set default output path and allow the user not to define an output filename, asigning then one by default.
+- Improve the UI: add a progress bar, allow to show/hide the logs of the subtitle generation process.
 - Add features to GUI for manipulating and customizing the output of the process.
 - Allow other audio formats as input.
 - Enable translation of generated subtitles to other languages.
 - Be able to specify in the input arguments the model to be used by whisper for speech to text process.
 - Create EXE file to be distributed.
-- Set default output path and allow the user not to define an output filename, asigning then one by default.
