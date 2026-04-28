@@ -220,7 +220,7 @@ def generate_time_checkpoints(pattern, total_milliseconds):
         current_seconds += interval_seconds
 
     if len(checkpoints) == 0:
-        checkpoints.append((total_seconds, str(datetime.timedelta(seconds=total_seconds))))
+        checkpoints.append((total_milliseconds, str(datetime.timedelta(seconds=total_seconds))))
 
     return checkpoints
 
