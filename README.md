@@ -114,6 +114,8 @@ python main.py -i /path/to/audio.mp3 -l en
 
 The repository now includes a `pytest`-based regression suite for stable helper and output-related behavior, with terminal coverage reporting enabled by default.
 
+The same test suite is also configured to run in GitHub Actions on push and pull request through [.github/workflows/tests.yml](.github/workflows/tests.yml).
+
 Install the development dependencies if you have not already done so: `install_dev_dependencies.cmd` or `install_dev_dependencies.sh`.
 
 Run the current automated tests and coverage report with:
@@ -127,6 +129,8 @@ If you want an HTML coverage report as well, run:
 ```
 python -m pytest --cov-report=html
 ```
+
+To make this workflow an actual branch gate, configure the GitHub repository branch protection rules to require the `Pytest` check before merge.
 
 The current suite focuses on deterministic helper logic and output-path/time handling without requiring Whisper, MoviePy, `python-magic`, or real media assets.
 
