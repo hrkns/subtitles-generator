@@ -112,14 +112,20 @@ python main.py -i /path/to/audio.mp3 -l en
 
 ## Testing
 
-The repository now includes a `pytest`-based regression suite for stable helper and output-related behavior.
+The repository now includes a `pytest`-based regression suite for stable helper and output-related behavior, with terminal coverage reporting enabled by default.
 
 Install the development dependencies if you have not already done so: `install_dev_dependencies.cmd` or `install_dev_dependencies.sh`.
 
-Run the current automated tests with:
+Run the current automated tests and coverage report with:
 
 ```
 python -m pytest
+```
+
+If you want an HTML coverage report as well, run:
+
+```
+python -m pytest --cov-report=html
 ```
 
 The current suite focuses on deterministic helper logic and output-path/time handling without requiring Whisper, MoviePy, `python-magic`, or real media assets.
