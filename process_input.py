@@ -5,7 +5,7 @@ import os
 import re
 import sys
 import magic
-from moviepy.editor import AudioFileClip
+from moviepy import AudioFileClip
 import whisper_timestamped as whisper
 from pydub import AudioSegment
 from pydub.exceptions import CouldntDecodeError
