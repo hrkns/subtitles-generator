@@ -13,7 +13,7 @@ Subtitles Generator is a versatile tool designed to generate subtitles (SRT file
 
 ## Requirements
 
-- Python 3.x
+- Python 3.13.1 or higher
 
 ## Installation
 
@@ -119,3 +119,4 @@ Contributions, issues, and feature requests are welcome!
 - Enable translation of generated subtitles to other languages.
 - Be able to specify in the input arguments the model to be used by whisper for speech to text process.
 - Create EXE file to be distributed.
+- Set default output path and allow the user not to define an output filename, asigning then one by default.
