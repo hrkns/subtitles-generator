@@ -21,11 +21,17 @@ Subtitles Generator is a versatile tool designed to generate subtitles (SRT file
 
 - Clone this repository or download the source code. Install the other required packages by running either `install_dependencies.cmd` or `install_dependencies.sh`.
 
+- For local development and test execution, install the additional dependencies by running `install_dev_dependencies.cmd` or `install_dev_dependencies.sh`.
+
+## Audio Cleaning Status
+
+Automatic audio cleaning is still in progress and is not yet wired into the subtitle generation flow.
+
+The current implementation target for this branch is documented in [Audio Cleaning Behavior Contract](docs/audio-cleaning-behavior-contract.md). It defines the planned cleaning modes (`off`, `basic`, and `speechbrain`), the precedence between per-run choice and saved defaults, and the rule that unavailable cleaning backends must fail explicitly instead of silently falling back.
+
 ## Usage
 
 The application can be used in two ways: through the command line or via the graphical user interface (GUI).
-
-The audio-cleaning work for this branch is being specified in [Audio Cleaning Behavior Contract](docs/audio-cleaning-behavior-contract.md).
 
 ### Using the GUI
 
@@ -46,8 +52,7 @@ The application can also be initiated with specific parameters detailed below:
 #### Mandatory Arguments:
 
 - `-i` or `--input`: The path to the input audio file in MP3 format or video format. This argument is required.
-  - If audio is provided, then the final result will be more accurate if the input audio is clean and contains only voices. For cleaning audio before passing it to the tool, use software like **[UVR](https://github.com/Anjok07/ultimatevocalremovergui)**. As a future feature this audio cleaning will be integrated automatically into this tool. For now is WIP in the following branches:
-    - [Enhacement of input speech using SpeechBrain](https://github.com/hrkns/subtitle-generator/tree/v0.1.x-speech-enhacement-using-speechbrain).
+  - If audio is provided, then the final result will be more accurate if the input audio is clean and contains only voices. Automatic cleaning is being implemented in this branch; until it is available in the CLI and GUI, use software like **[UVR](https://github.com/Anjok07/ultimatevocalremovergui)** when you need to clean audio before running the tool.
 
 #### Optional Arguments:
 
@@ -105,6 +110,20 @@ python main.py -i /path/to/audio.mp3 -s 5m
 python main.py -i /path/to/audio.mp3 -l en
 ```
 
+## Testing
+
+The repository now includes a `pytest`-based regression suite for stable helper and output-related behavior.
+
+Install the development dependencies if you have not already done so: `install_dev_dependencies.cmd` or `install_dev_dependencies.sh`.
+
+Run the current automated tests with:
+
+```
+python -m pytest
+```
+
+The current suite focuses on deterministic helper logic and output-path/time handling without requiring Whisper, MoviePy, `python-magic`, or real media assets.
+
 ## Contributing
 
 Contributions, issues, and feature requests are welcome!
@@ -115,7 +134,7 @@ Contributions, issues, and feature requests are welcome!
 
 ## TODO
 
-- Automatically clean input audio before applying speech detection.
+- Implement automatic audio cleaning according to [Audio Cleaning Behavior Contract](docs/audio-cleaning-behavior-contract.md).
 - Set default output path and allow the user not to define an output filename, asigning then one by default.
 - Improve the UI: add a progress bar, allow to show/hide the logs of the subtitle generation process.
 - Add features to GUI for manipulating and customizing the output of the process.
