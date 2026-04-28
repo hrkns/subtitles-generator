@@ -137,14 +137,3 @@ Contributions, issues, and feature requests are welcome!
 ## License
 
 [AGPL](https://www.gnu.org/licenses/agpl-3.0.en.html)
-
-## TODO
-
-- Implement automatic audio cleaning according to [Audio Cleaning Behavior Contract](docs/audio-cleaning-behavior-contract.md).
-- Set default output path and allow the user not to define an output filename, asigning then one by default.
-- Improve the UI: add a progress bar, allow to show/hide the logs of the subtitle generation process.
-- Add features to GUI for manipulating and customizing the output of the process.
-- Allow other audio formats as input.
-- Enable translation of generated subtitles to other languages.
-- Be able to specify in the input arguments the model to be used by whisper for speech to text process.
-- Create EXE file to be distributed.
