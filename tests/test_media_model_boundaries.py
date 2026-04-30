@@ -229,6 +229,19 @@ def test_resolve_cleaning_mode_uses_saved_default_when_no_explicit_value(monkeyp
     assert process_input_module.resolve_cleaning_mode() == "basic"
 
 
+def test_resolve_cleaning_mode_prefers_explicit_value_over_saved_default(monkeypatch):
+    monkeypatch.setattr(
+        process_input_module,
+        "load_cleaning_settings",
+        lambda: {
+            "default_cleaning_mode": "basic",
+            "preselect_saved_cleaning_mode": True,
+        },
+    )
+
+    assert process_input_module.resolve_cleaning_mode("off") == "off"
+
+
 def test_resolve_cleaning_mode_ignores_invalid_saved_default(monkeypatch, caplog):
     monkeypatch.setattr(
         process_input_module,

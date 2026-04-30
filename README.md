@@ -5,7 +5,7 @@ Subtitles Generator is a versatile tool designed to generate subtitles (SRT file
 ## Features
 
 - Support for guaranteed input in MP3 and WAV audio files, plus MP4 and AVI video files.
-- Optional CLI audio preprocessing modes: `off`, `basic`, and `speechbrain`.
+- Optional audio preprocessing modes in both the CLI and GUI: `off`, `basic`, and `speechbrain`.
 - Customizable checkpoints for subtitle segments.
 - Ability to specify specific audio segments for processing.
 - Language specification for the audio content.
@@ -48,6 +48,8 @@ If `--cleaning-mode` is omitted, the CLI resolves the effective mode in this ord
 - explicit per-run `--cleaning-mode`
 - saved default cleaning mode from `./.app-config.json`
 - built-in default `off`
+
+An explicit cleaning mode always wins for the current run, even when a saved preference already exists. The saved preference is only reused when no per-run mode is provided.
 
 The GUI now exposes the same cleaning-mode selection and save-default control as the CLI.
 When `speechbrain` is selected, the GUI validates both dependency availability and model readiness before execution starts, so first-run model download failures are surfaced before the subprocess begins.
@@ -104,7 +106,8 @@ The application can also be initiated with specific parameters detailed below:
 #### Mandatory Arguments:
 
 - `-i` or `--input`: The path to the input audio file in a supported audio format or supported video format. This argument is required.
-  - If audio is provided, then the final result will be more accurate if the input audio is clean and contains only voices. Automatic cleaning is being implemented in this branch; until it is available in the CLI and GUI, use software like **[UVR](https://github.com/Anjok07/ultimatevocalremovergui)** when you need to clean audio before running the tool.
+  - The input is normalized into an internal WAV working file before segmentation and transcription.
+  - You can leave cleaning disabled with `off`, use the default lightweight `basic` mode after the base install, or enable the optional heavier `speechbrain` mode after running the separate SpeechBrain installer.
   - Guaranteed supported input extensions are listed in the [Supported Input Formats](#supported-input-formats) section above.
 
 #### Optional Arguments:
@@ -123,8 +126,10 @@ The application can also be initiated with specific parameters detailed below:
   - `off` keeps the normalized working WAV unchanged.
   - `basic` uses the built-in lightweight cleanup chain and does not require extra model downloads.
   - `speechbrain` requires the optional SpeechBrain enhancement dependencies from `install_speechbrain_dependencies.cmd` or `install_speechbrain_dependencies.sh` and a first-run model download.
+  - If a saved preferred cleaning mode exists, an explicit `--cleaning-mode` still overrides it for that run.
 
 - `--save-cleaning-mode`: Persist the provided `--cleaning-mode` value as the new default for future runs. This flag requires `--cleaning-mode`.
+  - The saved preference is reused on later runs only when `--cleaning-mode` is omitted.
 
 ### Examples:
 
@@ -188,9 +193,17 @@ python main.py -i /path/to/audio.mp3 --cleaning-mode speechbrain
 python main.py -i /path/to/audio.mp3 --cleaning-mode basic --save-cleaning-mode
 ```
 
+11. Temporarily overriding a saved preferred cleaning mode for one run:
+
+```
+python main.py -i /path/to/audio.mp3 --cleaning-mode off
+```
+
 ## Testing
 
 The repository now includes a `pytest`-based regression suite for stable helper and output-related behavior, with terminal coverage reporting enabled by default.
+
+The current regression net covers the supported MP3, WAV, and video input paths, the `off`, `basic`, and `speechbrain` cleaning flows, saved preference reuse, and explicit one-run overrides.
 
 The same test suite is also configured to run in GitHub Actions on push and pull request through [.github/workflows/tests.yml](.github/workflows/tests.yml).
 
