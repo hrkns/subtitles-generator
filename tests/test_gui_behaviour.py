@@ -216,6 +216,31 @@ def test_widget_defaults_cleaning_mode_to_off_when_saved_value_is_not_preselecte
     assert widget.cleaningModeStatusLabel.text == "Off uses the normalized working WAV without additional cleaning."
 
 
+def test_build_command_uses_preselected_saved_cleaning_mode(monkeypatch):
+    widget, _updates = create_widget(
+        monkeypatch,
+        {
+            "preferred_cleaning_mode": "basic",
+            "auto_apply_cleaning_mode": True,
+        },
+    )
+    widget.selectedFile = "/tmp/input.mp3"
+    widget.outputPath = "/tmp/output.srt"
+
+    assert widget.build_command() == [
+        gui.sys.executable,
+        "main.py",
+        "--input",
+        "/tmp/input.mp3",
+        "--output",
+        "/tmp/output.srt",
+        "--checkpoints",
+        "30s",
+        "--cleaning-mode",
+        "basic",
+    ]
+
+
 def test_cleaning_mode_status_reports_unavailable_speechbrain(monkeypatch):
     widget, _updates = create_widget(monkeypatch)
 

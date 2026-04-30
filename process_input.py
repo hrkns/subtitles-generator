@@ -128,8 +128,8 @@ def resolve_cleaning_mode(cleaning_mode=None):
 
     return resolved_mode
 
-def persist_default_cleaning_mode(cleaning_mode):
-    resolved_mode = resolve_cleaning_mode(cleaning_mode)
+def persist_default_cleaning_mode(cleaning_mode, already_resolved=False):
+    resolved_mode = cleaning_mode if already_resolved else resolve_cleaning_mode(cleaning_mode)
     save_cleaning_settings(resolved_mode, preselect_saved_cleaning_mode=True)
     logging.info(f"Saved default cleaning mode '{resolved_mode}'.")
     return resolved_mode
@@ -451,7 +451,7 @@ def process_input(args):
 
     if getattr(args, "save_cleaning_mode", False) and explicit_cleaning_mode is not None:
         try:
-            persist_default_cleaning_mode(explicit_cleaning_mode)
+            persist_default_cleaning_mode(cleaning_mode, already_resolved=True)
         except Exception as e:
             logging.error(f"Could not persist cleaning mode '{cleaning_mode}': {str(e)}")
 

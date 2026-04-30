@@ -232,6 +232,63 @@ def test_process_input_uses_saved_cleaning_mode_when_no_explicit_selection(tmp_p
     )
 
 
+def test_process_input_resolves_cleaning_mode_once_and_reuses_it_for_persistence_and_preprocessing(tmp_path, monkeypatch):
+    tmp_dir = tmp_path / "tmp"
+    monkeypatch.setattr(process_input_module, "TMP_DIR", f"{tmp_dir}{os.sep}")
+
+    calls = {"resolve_cleaning_mode": 0}
+    fake_audio = FakeAudio(42000)
+
+    def fake_resolve_cleaning_mode(explicit_cleaning_mode):
+        calls["resolve_cleaning_mode"] += 1
+        assert explicit_cleaning_mode == "basic"
+        return "basic"
+
+    def fake_save_cleaning_settings(default_cleaning_mode, preselect_saved_cleaning_mode=True):
+        calls["save_cleaning_settings"] = (default_cleaning_mode, preselect_saved_cleaning_mode)
+
+    def fake_prepare_transcription_audio(input_path, cleaning_mode):
+        calls["prepare_transcription_audio"] = (input_path, cleaning_mode)
+        return (os.path.join(process_input_module.TMP_DIR, process_input_module.WORKING_AUDIO_FILENAME), fake_audio)
+
+    def fake_process_audio_segments(input_audio, segments_to_process, audio_language, speech_to_text_model, output_json_template):
+        calls["process_audio_segments"] = (
+            input_audio,
+            segments_to_process,
+            audio_language,
+            speech_to_text_model,
+            output_json_template,
+        )
+
+    monkeypatch.setattr(process_input_module, "resolve_cleaning_mode", fake_resolve_cleaning_mode)
+    monkeypatch.setattr(process_input_module, "save_cleaning_settings", fake_save_cleaning_settings)
+    monkeypatch.setattr(process_input_module, "prepare_transcription_audio", fake_prepare_transcription_audio)
+    monkeypatch.setattr(process_input_module.whisper, "load_model", lambda model_name: "fake-model")
+    monkeypatch.setattr(process_input_module, "process_audio_segments", fake_process_audio_segments)
+
+    args = SimpleNamespace(
+        input="input.mp3",
+        checkpoints=None,
+        segments=None,
+        language=None,
+        cleaning_mode="basic",
+        save_cleaning_mode=True,
+    )
+
+    process_input_module.process_input(args)
+
+    assert calls["resolve_cleaning_mode"] == 1
+    assert calls["save_cleaning_settings"] == ("basic", True)
+    assert calls["prepare_transcription_audio"] == ("input.mp3", "basic")
+    assert calls["process_audio_segments"] == (
+        fake_audio,
+        [(0, 42000)],
+        "en",
+        "fake-model",
+        os.path.join(process_input_module.TMP_DIR, "speech_recognition_result_segment_{}.json"),
+    )
+
+
 def test_process_input_continues_when_persisting_cleaning_mode_fails(tmp_path, monkeypatch, caplog):
     tmp_dir = tmp_path / "tmp"
     monkeypatch.setattr(process_input_module, "TMP_DIR", f"{tmp_dir}{os.sep}")
