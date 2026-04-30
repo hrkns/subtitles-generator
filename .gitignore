@@ -155,3 +155,4 @@ tmp
 src
 .cache*
 .cleaning-settings.json
+audio_cache/

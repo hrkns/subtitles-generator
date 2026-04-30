@@ -22,6 +22,10 @@ Subtitles Generator is a versatile tool designed to generate subtitles (SRT file
 
 - Clone this repository or download the source code. Install the other required packages by running either `install_dependencies.cmd` or `install_dependencies.sh`.
 
+- To enable the optional `speechbrain` cleaning mode, install the heavier enhancement stack by running either `install_speechbrain_dependencies.cmd` or `install_speechbrain_dependencies.sh`.
+  - This optional install adds the SpeechBrain inference backend used by `--cleaning-mode speechbrain`.
+  - Downloaded model assets are cached under `audio_cache/` and are not required when using `off` or `basic`.
+
 - For local development and test execution, install the additional dependencies by running `install_dev_dependencies.cmd` or `install_dev_dependencies.sh`.
 
 ## Audio Cleaning Status
@@ -33,6 +37,8 @@ The current CLI-supported modes are:
 - `off`: use the normalized working WAV without additional cleaning
 - `basic`: apply a lightweight Pydub-based cleanup chain
 - `speechbrain`: apply SpeechBrain enhancement when its optional dependencies are available
+  - This is the heavier optional backend and it requires the optional SpeechBrain install step.
+  - If its dependency stack or model assets are unavailable, the application fails explicitly for that run and does not silently fall back.
 
 The CLI can also persist a chosen cleaning mode as the new default for future runs.
 If `--cleaning-mode` is omitted, the CLI resolves the effective mode in this order:
@@ -112,7 +118,7 @@ The application can also be initiated with specific parameters detailed below:
 - `--cleaning-mode`: Optional preprocessing mode to apply once to the normalized working audio before segmentation and transcription. Supported values are `off`, `basic`, and `speechbrain`.
   - `off` keeps the normalized working WAV unchanged.
   - `basic` uses the built-in lightweight cleanup chain and does not require extra model downloads.
-  - `speechbrain` requires the optional SpeechBrain enhancement dependencies and a first-run model download.
+  - `speechbrain` requires the optional SpeechBrain enhancement dependencies from `install_speechbrain_dependencies.cmd` or `install_speechbrain_dependencies.sh` and a first-run model download.
 
 - `--save-cleaning-mode`: Persist the provided `--cleaning-mode` value as the new default for future runs. This flag requires `--cleaning-mode`.
 

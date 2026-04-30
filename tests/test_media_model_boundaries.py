@@ -340,8 +340,34 @@ def test_load_speechbrain_enhancer_reports_missing_dependency(monkeypatch):
 
     monkeypatch.setattr(process_input_module.importlib, "import_module", fake_import_module)
 
-    with pytest.raises(RuntimeError, match="optional speechbrain enhancement dependencies"):
+    with pytest.raises(RuntimeError, match="install_speechbrain_dependencies"):
         process_input_module.load_speechbrain_enhancer()
+
+
+def test_load_speechbrain_enhancer_reports_model_load_failure_with_cache_path(tmp_path, monkeypatch):
+    monkeypatch.setattr(process_input_module, "AUDIO_CACHE_DIR", f"{tmp_path}{os.sep}cache{os.sep}")
+
+    class FakeSpectralMaskEnhancement:
+        @staticmethod
+        def from_hparams(source, savedir):
+            raise RuntimeError("download failed")
+
+    monkeypatch.setattr(
+        process_input_module.importlib,
+        "import_module",
+        lambda module_name: types.SimpleNamespace(SpectralMaskEnhancement=FakeSpectralMaskEnhancement),
+    )
+
+    expected_savedir = os.path.join(
+        process_input_module.AUDIO_CACHE_DIR,
+        process_input_module.SPEECHBRAIN_MODEL_CACHE_DIRNAME,
+    )
+
+    with pytest.raises(RuntimeError, match="could not load its enhancement model into") as exc_info:
+        process_input_module.load_speechbrain_enhancer()
+
+    assert expected_savedir in str(exc_info.value)
+    assert os.path.isdir(expected_savedir)
 
 
 def test_apply_audio_cleaning_speechbrain_enhances_working_audio(tmp_path, monkeypatch):

@@ -23,6 +23,9 @@ DEFAULT_CLEANING_MODE = "off"
 PREPROCESSED_AUDIO_FILENAME_TEMPLATE = f"working_input_audio_{{}}.{WORKING_AUDIO_FORMAT}"
 SPEECHBRAIN_MODEL_SOURCE = "speechbrain/metricgan-plus-voicebank"
 SPEECHBRAIN_MODEL_CACHE_DIRNAME = "speechbrain_metricgan_plus_voicebank"
+SPEECHBRAIN_INSTALL_HINT = (
+    "Install them with install_speechbrain_dependencies.cmd on Windows or install_speechbrain_dependencies.sh on Linux/macOS."
+)
 
 def validate_audio_file(file_path):
     if not os.path.exists(file_path):
@@ -147,7 +150,8 @@ def load_speechbrain_enhancer():
         spectral_mask_enhancement = enhancement_module.SpectralMaskEnhancement
     except Exception as e:
         raise RuntimeError(
-            "SpeechBrain cleaning mode requires the optional speechbrain enhancement dependencies to be installed."
+            "SpeechBrain cleaning mode requires the optional speechbrain enhancement dependencies to be installed. "
+            + SPEECHBRAIN_INSTALL_HINT
         ) from e
 
     savedir = os.path.join(AUDIO_CACHE_DIR, SPEECHBRAIN_MODEL_CACHE_DIRNAME)
@@ -160,7 +164,9 @@ def load_speechbrain_enhancer():
         )
     except Exception as e:
         raise RuntimeError(
-            "SpeechBrain cleaning mode could not load its enhancement model. Ensure the optional dependencies are installed and the model assets can be downloaded."
+            f"SpeechBrain cleaning mode could not load its enhancement model into {savedir}. "
+            "Ensure the optional dependencies are installed, network access is available for the first download, "
+            "and the cache directory is writable."
         ) from e
 
 def apply_speechbrain_audio_cleaning(input_path, output_path):
