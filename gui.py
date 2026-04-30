@@ -20,6 +20,16 @@ def is_speechbrain_dependency_available():
     except Exception:
         return False
 
+
+def validate_speechbrain_runtime_ready():
+    try:
+        process_input_module = importlib.import_module("process_input")
+        process_input_module.load_speechbrain_enhancer()
+    except Exception as e:
+        raise RuntimeError(
+            f"SpeechBrain enhancement is unavailable: {str(e)}"
+        ) from e
+
 class Worker(QObject):
     output = pyqtSignal(str)
     finished = pyqtSignal()
@@ -138,7 +148,7 @@ class SubtitlesGeneratorGUI(QWidget):
         if selected_mode == "speechbrain":
             if self.speechbrainDependencyAvailable:
                 self.cleaningModeStatusLabel.setText(
-                    "SpeechBrain enhancement is available. The first run may download model assets."
+                    "SpeechBrain enhancement dependencies are available. Model readiness will be validated before launch, and the first run may download model assets."
                 )
             else:
                 self.cleaningModeStatusLabel.setText(
@@ -155,7 +165,7 @@ class SubtitlesGeneratorGUI(QWidget):
 
     def build_command(self):
         command = [
-            "python",
+            sys.executable,
             "main.py",
             "--input",
             self.selectedFile,
@@ -171,6 +181,28 @@ class SubtitlesGeneratorGUI(QWidget):
             command.append("--save-cleaning-mode")
 
         return command
+
+    def validate_selected_cleaning_mode(self):
+        selected_mode = self.cleaningModeComboBox.currentText()
+
+        if selected_mode != "speechbrain":
+            return True
+
+        if not self.speechbrainDependencyAvailable:
+            self.logTextEdit.append(
+                "SpeechBrain enhancement is unavailable. Install the optional SpeechBrain dependencies before running with this mode."
+            )
+            return False
+
+        self.logTextEdit.append("Validating SpeechBrain enhancement availability...")
+
+        try:
+            validate_speechbrain_runtime_ready()
+        except RuntimeError as e:
+            self.logTextEdit.append(str(e))
+            return False
+
+        return True
 
     def select_file(self):
         # File selection dialog
@@ -215,15 +247,14 @@ class SubtitlesGeneratorGUI(QWidget):
         if not self.selectedFile or not self.outputPath:
             self.logTextEdit.append("No input or output file selected.")
             return
-        elif self.cleaningModeComboBox.currentText() == "speechbrain" and not self.speechbrainDependencyAvailable:
-            self.logTextEdit.append(
-                "SpeechBrain enhancement is unavailable. Install the optional SpeechBrain dependencies before running with this mode."
-            )
-            return
         else:
             # Clear the log text edit and initialize it back
             self.logTextEdit.clear()
-            self.logTextEdit.append("Running script...")
+
+        if not self.validate_selected_cleaning_mode():
+            return
+
+        self.logTextEdit.append("Running script...")
 
         # Disable the run button and show the cancel button
         self.btnRunScript.setDisabled(True)

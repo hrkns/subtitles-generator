@@ -215,6 +215,27 @@ def test_cleaning_mode_status_reports_unavailable_speechbrain(monkeypatch):
     )
 
 
+def test_cleaning_mode_status_reports_runtime_validation_for_available_speechbrain(monkeypatch):
+    cache = DummyCache()
+    monkeypatch.setattr(gui.shelve, "open", lambda _path: cache)
+    monkeypatch.setattr(
+        gui,
+        "load_cleaning_settings",
+        lambda: {
+            "default_cleaning_mode": None,
+            "preselect_saved_cleaning_mode": False,
+        },
+    )
+    monkeypatch.setattr(gui, "is_speechbrain_dependency_available", lambda: True)
+
+    widget = gui.SubtitlesGeneratorGUI()
+    widget.cleaningModeComboBox.setCurrentText("speechbrain")
+
+    assert widget.cleaningModeStatusLabel.text == (
+        "SpeechBrain enhancement dependencies are available. Model readiness will be validated before launch, and the first run may download model assets."
+    )
+
+
 def test_run_script_requires_input_and_output(monkeypatch):
     widget, _cache = create_widget(monkeypatch)
 
@@ -254,7 +275,7 @@ def test_run_script_starts_worker_and_disables_controls(monkeypatch):
     assert widget.btnSelectOutput.disabled is True
     assert widget.btnCancelScript.visible is True
     assert created["worker"].command == [
-        "python",
+        gui.sys.executable,
         "main.py",
         "--input",
         "/tmp/input.mp3",
@@ -282,6 +303,94 @@ def test_run_script_blocks_unavailable_speechbrain_before_execution(monkeypatch)
     ]
     assert not hasattr(widget, "worker")
     assert widget.btnRunScript.disabled is False
+
+
+def test_run_script_blocks_speechbrain_when_runtime_validation_fails(monkeypatch):
+    cache = DummyCache()
+    monkeypatch.setattr(gui.shelve, "open", lambda _path: cache)
+    monkeypatch.setattr(
+        gui,
+        "load_cleaning_settings",
+        lambda: {
+            "default_cleaning_mode": None,
+            "preselect_saved_cleaning_mode": False,
+        },
+    )
+    monkeypatch.setattr(gui, "is_speechbrain_dependency_available", lambda: True)
+    monkeypatch.setattr(
+        gui,
+        "validate_speechbrain_runtime_ready",
+        lambda: (_ for _ in ()).throw(RuntimeError("SpeechBrain enhancement is unavailable: model download failed")),
+    )
+
+    widget = gui.SubtitlesGeneratorGUI()
+    widget.selectedFile = "/tmp/input.mp3"
+    widget.outputPath = "/tmp/output.srt"
+    widget.cleaningModeComboBox.setCurrentText("speechbrain")
+
+    widget.run_script()
+
+    assert widget.logTextEdit.lines == [
+        "Validating SpeechBrain enhancement availability...",
+        "SpeechBrain enhancement is unavailable: model download failed",
+    ]
+    assert not hasattr(widget, "worker")
+    assert widget.btnRunScript.disabled is False
+
+
+def test_run_script_validates_speechbrain_then_starts_worker(monkeypatch):
+    cache = DummyCache()
+    monkeypatch.setattr(gui.shelve, "open", lambda _path: cache)
+    monkeypatch.setattr(
+        gui,
+        "load_cleaning_settings",
+        lambda: {
+            "default_cleaning_mode": None,
+            "preselect_saved_cleaning_mode": False,
+        },
+    )
+    monkeypatch.setattr(gui, "is_speechbrain_dependency_available", lambda: True)
+
+    created = {}
+
+    def fake_worker_factory(command):
+        worker = FakeWorkerForGui(command)
+        created["worker"] = worker
+        return worker
+
+    def fake_thread_factory(target):
+        thread = FakeThread(target)
+        created["thread"] = thread
+        return thread
+
+    monkeypatch.setattr(gui, "validate_speechbrain_runtime_ready", lambda: None)
+    monkeypatch.setattr(gui, "Worker", fake_worker_factory)
+    monkeypatch.setattr(gui.threading, "Thread", fake_thread_factory)
+
+    widget = gui.SubtitlesGeneratorGUI()
+    widget.selectedFile = "/tmp/input.mp3"
+    widget.outputPath = "/tmp/output.srt"
+    widget.cleaningModeComboBox.setCurrentText("speechbrain")
+
+    widget.run_script()
+
+    assert widget.logTextEdit.lines == [
+        "Validating SpeechBrain enhancement availability...",
+        "Running script...",
+    ]
+    assert created["worker"].command == [
+        gui.sys.executable,
+        "main.py",
+        "--input",
+        "/tmp/input.mp3",
+        "--output",
+        "/tmp/output.srt",
+        "--checkpoints",
+        "30s",
+        "--cleaning-mode",
+        "speechbrain",
+    ]
+    assert created["thread"].started is True
 
 
 def test_cancel_script_stops_worker_and_restores_controls(monkeypatch):

@@ -42,7 +42,7 @@ If `--cleaning-mode` is omitted, the CLI resolves the effective mode in this ord
 - built-in default `off`
 
 The GUI now exposes the same cleaning-mode selection and save-default control as the CLI.
-When `speechbrain` is selected, the GUI shows whether its optional dependencies are currently available before execution starts.
+When `speechbrain` is selected, the GUI validates both dependency availability and model readiness before execution starts, so first-run model download failures are surfaced before the subprocess begins.
 
 The current implementation target for this branch is documented in [Audio Cleaning Behavior Contract](docs/audio-cleaning-behavior-contract.md). It defines the planned cleaning modes (`off`, `basic`, and `speechbrain`), the precedence between per-run choice and saved defaults, and the rule that unavailable cleaning backends must fail explicitly instead of silently falling back.
 
@@ -83,6 +83,7 @@ The GUI now includes:
 - a cleaning-mode selector with `off`, `basic`, and `speechbrain`
 - a checkbox to save the selected mode as the default for future runs
 - a status message that explains the selected mode and warns when `speechbrain` is unavailable
+- a pre-launch validation step for `speechbrain` that checks the real enhancer can be prepared before the generation subprocess starts
 
 ![Alt text](assets/img/gui.png)
 
