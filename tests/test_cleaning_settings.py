@@ -1,6 +1,7 @@
 import json
 import logging
 
+import app_config as app_config_module
 import cleaning_settings as cleaning_settings_module
 
 
@@ -18,7 +19,7 @@ def test_load_cleaning_settings_returns_defaults_when_file_is_invalid(tmp_path, 
         settings = cleaning_settings_module.load_cleaning_settings(str(settings_path))
 
     assert settings == cleaning_settings_module.CLEANING_SETTINGS_DEFAULTS
-    assert "Could not read cleaning settings" in caplog.text
+    assert "Could not read app config" in caplog.text
 
 
 def test_save_cleaning_settings_writes_expected_fields(tmp_path):
@@ -33,5 +34,14 @@ def test_save_cleaning_settings_writes_expected_fields(tmp_path):
     assert settings == {
         "default_cleaning_mode": "basic",
         "preselect_saved_cleaning_mode": True,
+        "basic_strategy_settings": app_config_module.APP_CONFIG_DEFAULTS["basic_strategy_settings"],
+        "speechbrain_strategy_settings": app_config_module.APP_CONFIG_DEFAULTS["speechbrain_strategy_settings"],
     }
-    assert json.loads(settings_path.read_text(encoding="utf-8")) == settings
+    assert json.loads(settings_path.read_text(encoding="utf-8")) == {
+        "last_input_path": "",
+        "last_output_path": "",
+        "preferred_cleaning_mode": "basic",
+        "auto_apply_cleaning_mode": True,
+        "basic_strategy_settings": app_config_module.APP_CONFIG_DEFAULTS["basic_strategy_settings"],
+        "speechbrain_strategy_settings": app_config_module.APP_CONFIG_DEFAULTS["speechbrain_strategy_settings"],
+    }

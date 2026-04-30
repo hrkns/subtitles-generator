@@ -44,11 +44,12 @@ The CLI can also persist a chosen cleaning mode as the new default for future ru
 If `--cleaning-mode` is omitted, the CLI resolves the effective mode in this order:
 
 - explicit per-run `--cleaning-mode`
-- saved default cleaning mode from `./.cleaning-settings.json`
+- saved default cleaning mode from `./.app-config.json`
 - built-in default `off`
 
 The GUI now exposes the same cleaning-mode selection and save-default control as the CLI.
 When `speechbrain` is selected, the GUI validates both dependency availability and model readiness before execution starts, so first-run model download failures are surfaced before the subprocess begins.
+GUI-specific state is now stored in a dedicated local app config file at `./.app-config.json`, which keeps the last used paths, preferred cleaning mode, auto-apply preference, and strategy-specific settings together in one place.
 
 The current implementation target for this branch is documented in [Audio Cleaning Behavior Contract](docs/audio-cleaning-behavior-contract.md). It defines the planned cleaning modes (`off`, `basic`, and `speechbrain`), the precedence between per-run choice and saved defaults, and the rule that unavailable cleaning backends must fail explicitly instead of silently falling back.
 
@@ -87,6 +88,7 @@ In the GUI, you can easily set the input file and the output path. Once all para
 The GUI now includes:
 
 - a cleaning-mode selector with `off`, `basic`, and `speechbrain`
+- an auto-apply checkbox that controls whether the preferred cleaning mode is preselected on startup
 - a checkbox to save the selected mode as the default for future runs
 - a status message that explains the selected mode and warns when `speechbrain` is unavailable
 - a pre-launch validation step for `speechbrain` that checks the real enhancer can be prepared before the generation subprocess starts

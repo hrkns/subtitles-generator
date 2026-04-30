@@ -1,12 +1,12 @@
 import sys
 import subprocess
 import threading
-import shelve
 import importlib
+import logging
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QTextEdit, QLabel, QFileDialog, QMessageBox, QComboBox, QCheckBox
 from PyQt5.QtCore import pyqtSignal, QObject 
-from modules import load_cleaning_settings
+from modules import load_app_config, update_app_config
 
 
 SUPPORTED_CLEANING_MODES = ("off", "basic", "speechbrain")
@@ -95,6 +95,9 @@ class SubtitlesGeneratorGUI(QWidget):
         self.cleaningModeComboBox.currentTextChanged.connect(self.update_cleaning_mode_status)
         layout.addWidget(self.cleaningModeComboBox)
 
+        self.autoApplyCleaningModeCheckBox = QCheckBox("Auto-apply preferred cleaning mode on startup")
+        layout.addWidget(self.autoApplyCleaningModeCheckBox)
+
         self.saveCleaningModeCheckBox = QCheckBox("Save selected cleaning mode as default for future runs")
         layout.addWidget(self.saveCleaningModeCheckBox)
 
@@ -118,31 +121,35 @@ class SubtitlesGeneratorGUI(QWidget):
         self.outputPath = ""
         self.selectedFile = ""
 
-        # Load cached paths
-        self.cache = shelve.open(".cache")
-        try:
-            self.lastInputPath = self.cache.get("lastInputPath", "")
-        except Exception as e:
-            self.lastInputPath = ""
-        try:
-            self.lastOutputPath = self.cache.get("lastOutputPath", "")
-        except Exception as e:
-            self.lastOutputPath = ""
-
+        self.appConfig = load_app_config()
+        self.lastInputPath = self.appConfig.get("last_input_path", "")
+        self.lastOutputPath = self.appConfig.get("last_output_path", "")
         self.speechbrainDependencyAvailable = is_speechbrain_dependency_available()
-        self.cleaningSettings = load_cleaning_settings()
+        self.autoApplyCleaningModeCheckBox.setChecked(self.appConfig.get("auto_apply_cleaning_mode", False))
         self.cleaningModeComboBox.setCurrentText(self.resolve_initial_cleaning_mode())
         self.saveCleaningModeCheckBox.setChecked(False)
         self.update_cleaning_mode_status(self.cleaningModeComboBox.currentText())
 
     def resolve_initial_cleaning_mode(self):
-        saved_mode = self.cleaningSettings.get("default_cleaning_mode")
-        should_preselect_saved_mode = self.cleaningSettings.get("preselect_saved_cleaning_mode", False)
+        saved_mode = self.appConfig.get("preferred_cleaning_mode")
+        should_preselect_saved_mode = self.appConfig.get("auto_apply_cleaning_mode", False)
 
         if should_preselect_saved_mode and saved_mode in SUPPORTED_CLEANING_MODES:
             return saved_mode
 
         return DEFAULT_CLEANING_MODE
+
+    def update_app_config_safely(self, app_config_updates, error_prefix=None, show_in_log=False):
+        try:
+            self.appConfig = update_app_config(app_config_updates)
+            return True
+        except Exception as e:
+            error_message = error_prefix or "Could not persist application configuration."
+            full_error_message = f"{error_message} {str(e)}"
+            logging.warning(full_error_message)
+            if show_in_log:
+                self.logTextEdit.append(full_error_message)
+            return False
 
     def update_cleaning_mode_status(self, selected_mode):
         if selected_mode == "speechbrain":
@@ -177,10 +184,26 @@ class SubtitlesGeneratorGUI(QWidget):
             self.cleaningModeComboBox.currentText(),
         ]
 
-        if self.saveCleaningModeCheckBox.isChecked():
-            command.append("--save-cleaning-mode")
-
         return command
+
+    def persist_runtime_preferences(self):
+        return self.update_app_config_safely(
+            {
+                "last_input_path": self.lastInputPath,
+                "last_output_path": self.lastOutputPath,
+                "auto_apply_cleaning_mode": self.autoApplyCleaningModeCheckBox.isChecked(),
+            }
+        )
+
+    def persist_preferred_cleaning_mode(self):
+        return self.update_app_config_safely(
+            {
+                "preferred_cleaning_mode": self.cleaningModeComboBox.currentText(),
+                "auto_apply_cleaning_mode": self.autoApplyCleaningModeCheckBox.isChecked(),
+            },
+            error_prefix="Could not save preferred cleaning settings.",
+            show_in_log=True,
+        )
 
     def validate_selected_cleaning_mode(self):
         selected_mode = self.cleaningModeComboBox.currentText()
@@ -197,7 +220,9 @@ class SubtitlesGeneratorGUI(QWidget):
         self.logTextEdit.append("Validating SpeechBrain enhancement availability...")
 
         try:
-            validate_speechbrain_runtime_ready()
+            should_validate_runtime = self.appConfig.get("speechbrain_strategy_settings", {}).get("validate_runtime_before_launch", True)
+            if should_validate_runtime:
+                validate_speechbrain_runtime_ready()
         except RuntimeError as e:
             self.logTextEdit.append(str(e))
             return False
@@ -211,7 +236,7 @@ class SubtitlesGeneratorGUI(QWidget):
             self.selectedFile = file_name
             self.selectedFileLabel.setText(f"Selected File: {file_name}")
             self.lastInputPath = "/".join(file_name.split("/")[:-1])
-            self.cache["lastInputPath"] = self.lastInputPath
+            self.persist_runtime_preferences()
 
     def select_output_file(self):
         # Output file selection dialog
@@ -224,7 +249,7 @@ class SubtitlesGeneratorGUI(QWidget):
             self.outputPath = file_name
             self.outputPathLabel.setText(f"Output File: {file_name}")
             self.lastOutputPath = "/".join(file_name.split("/")[:-1])
-            self.cache["lastOutputPath"] = self.lastOutputPath
+            self.persist_runtime_preferences()
 
     def closeEvent(self, event):
         if hasattr(self, 'worker') and self.worker.is_running():
@@ -239,7 +264,7 @@ class SubtitlesGeneratorGUI(QWidget):
                 event.ignore()
                 return
 
-        self.cache.close()
+        self.persist_runtime_preferences()
         super().closeEvent(event)
 
     def run_script(self):
@@ -253,6 +278,11 @@ class SubtitlesGeneratorGUI(QWidget):
 
         if not self.validate_selected_cleaning_mode():
             return
+
+        self.persist_runtime_preferences()
+
+        if self.saveCleaningModeCheckBox.isChecked():
+            self.persist_preferred_cleaning_mode()
 
         self.logTextEdit.append("Running script...")
 

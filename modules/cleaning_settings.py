@@ -1,51 +1,54 @@
-import json
-import logging
-import os
-
-from config import CLEANING_SETTINGS_FILE
+from config import APP_CONFIG_FILE, CLEANING_SETTINGS_FILE
+from app_config import APP_CONFIG_DEFAULTS, load_app_config, update_app_config
 
 
 CLEANING_SETTINGS_DEFAULTS = {
-    "default_cleaning_mode": None,
-    "preselect_saved_cleaning_mode": False,
+    "default_cleaning_mode": APP_CONFIG_DEFAULTS["preferred_cleaning_mode"],
+    "preselect_saved_cleaning_mode": APP_CONFIG_DEFAULTS["auto_apply_cleaning_mode"],
+    "basic_strategy_settings": APP_CONFIG_DEFAULTS["basic_strategy_settings"],
+    "speechbrain_strategy_settings": APP_CONFIG_DEFAULTS["speechbrain_strategy_settings"],
 }
 
 
-def load_cleaning_settings(settings_path=CLEANING_SETTINGS_FILE):
-    settings = CLEANING_SETTINGS_DEFAULTS.copy()
+def load_cleaning_settings(settings_path=APP_CONFIG_FILE):
+    legacy_path = CLEANING_SETTINGS_FILE if settings_path == APP_CONFIG_FILE else None
+    app_config = load_app_config(settings_path, legacy_cleaning_settings_path=legacy_path)
 
-    if not os.path.exists(settings_path):
-        return settings
-
-    try:
-        with open(settings_path, "r", encoding="utf-8") as file:
-            persisted_settings = json.load(file)
-    except (OSError, json.JSONDecodeError) as e:
-        logging.warning(f"Could not read cleaning settings from {settings_path}: {str(e)}")
-        return settings
-
-    if not isinstance(persisted_settings, dict):
-        logging.warning(f"Ignoring invalid cleaning settings content from {settings_path}: expected an object.")
-        return settings
-
-    for key in settings:
-        if key in persisted_settings:
-            settings[key] = persisted_settings[key]
-
-    return settings
-
-
-def save_cleaning_settings(default_cleaning_mode, preselect_saved_cleaning_mode=True, settings_path=CLEANING_SETTINGS_FILE):
-    settings = {
-        "default_cleaning_mode": default_cleaning_mode,
-        "preselect_saved_cleaning_mode": preselect_saved_cleaning_mode,
+    return {
+        "default_cleaning_mode": app_config["preferred_cleaning_mode"],
+        "preselect_saved_cleaning_mode": app_config["auto_apply_cleaning_mode"],
+        "basic_strategy_settings": app_config["basic_strategy_settings"],
+        "speechbrain_strategy_settings": app_config["speechbrain_strategy_settings"],
     }
 
-    settings_dir = os.path.dirname(settings_path)
-    if settings_dir:
-        os.makedirs(settings_dir, exist_ok=True)
 
-    with open(settings_path, "w", encoding="utf-8") as file:
-        json.dump(settings, file, ensure_ascii=True, indent=2)
+def save_cleaning_settings(
+    default_cleaning_mode,
+    preselect_saved_cleaning_mode=True,
+    settings_path=APP_CONFIG_FILE,
+    basic_strategy_settings=None,
+    speechbrain_strategy_settings=None,
+):
+    app_config_updates = {
+        "preferred_cleaning_mode": default_cleaning_mode,
+        "auto_apply_cleaning_mode": preselect_saved_cleaning_mode,
+    }
 
-    return settings
+    if basic_strategy_settings is not None:
+        app_config_updates["basic_strategy_settings"] = basic_strategy_settings
+
+    if speechbrain_strategy_settings is not None:
+        app_config_updates["speechbrain_strategy_settings"] = speechbrain_strategy_settings
+
+    updated_config = update_app_config(
+        app_config_updates,
+        config_path=settings_path,
+        legacy_cleaning_settings_path=None,
+    )
+
+    return {
+        "default_cleaning_mode": updated_config["preferred_cleaning_mode"],
+        "preselect_saved_cleaning_mode": updated_config["auto_apply_cleaning_mode"],
+        "basic_strategy_settings": updated_config["basic_strategy_settings"],
+        "speechbrain_strategy_settings": updated_config["speechbrain_strategy_settings"],
+    }

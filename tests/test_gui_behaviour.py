@@ -3,15 +3,6 @@ import pytest
 import gui
 
 
-class DummyCache(dict):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.closed = False
-
-    def close(self):
-        self.closed = True
-
-
 class DummyEvent:
     def __init__(self):
         self.ignored = False
@@ -90,19 +81,41 @@ class FakeWorkerForGui:
         return False
 
 
-def create_widget(monkeypatch, cache=None):
-    fake_cache = cache or DummyCache()
-    monkeypatch.setattr(gui.shelve, "open", lambda _path: fake_cache)
-    monkeypatch.setattr(
-        gui,
-        "load_cleaning_settings",
-        lambda: {
-            "default_cleaning_mode": None,
-            "preselect_saved_cleaning_mode": False,
+def build_app_config(**overrides):
+    app_config = {
+        "last_input_path": "",
+        "last_output_path": "",
+        "preferred_cleaning_mode": None,
+        "auto_apply_cleaning_mode": False,
+        "basic_strategy_settings": {
+            "high_pass_cutoff_hz": 120,
+            "low_pass_cutoff_hz": 7600,
+            "apply_dynamic_range_compression": True,
+            "apply_normalization": True,
         },
-    )
+        "speechbrain_strategy_settings": {
+            "model_source": "speechbrain/metricgan-plus-voicebank",
+            "validate_runtime_before_launch": True,
+        },
+    }
+    app_config.update(overrides)
+    return app_config
+
+
+def create_widget(monkeypatch, app_config=None):
+    fake_app_config = build_app_config(**(app_config or {}))
+    updates = []
+
+    def fake_update_app_config(app_config_updates):
+        fake_app_config.update(app_config_updates)
+        updates.append(app_config_updates)
+        return fake_app_config.copy()
+
+    monkeypatch.setattr(gui, "load_app_config", lambda: fake_app_config.copy())
+    monkeypatch.setattr(gui, "update_app_config", fake_update_app_config)
     monkeypatch.setattr(gui, "is_speechbrain_dependency_available", lambda: False)
-    return gui.SubtitlesGeneratorGUI(), fake_cache
+
+    return gui.SubtitlesGeneratorGUI(), updates
 
 
 def test_worker_run_emits_output_and_finished(monkeypatch):
@@ -142,8 +155,8 @@ def test_worker_stop_terminates_running_process():
     assert fake_process.terminated is True
 
 
-def test_select_file_updates_selected_input_and_cache(monkeypatch):
-    widget, cache = create_widget(monkeypatch, DummyCache({"lastInputPath": "/old"}))
+def test_select_file_updates_selected_input_and_config(monkeypatch):
+    widget, updates = create_widget(monkeypatch, {"last_input_path": "/old"})
     monkeypatch.setattr(gui.QFileDialog, "getOpenFileName", lambda *args, **kwargs: ("/tmp/input.mp3", ""))
 
     widget.select_file()
@@ -151,11 +164,15 @@ def test_select_file_updates_selected_input_and_cache(monkeypatch):
     assert widget.selectedFile == "/tmp/input.mp3"
     assert widget.selectedFileLabel.text == "Selected File: /tmp/input.mp3"
     assert widget.lastInputPath == "/tmp"
-    assert cache["lastInputPath"] == "/tmp"
+    assert updates[-1] == {
+        "last_input_path": "/tmp",
+        "last_output_path": "",
+        "auto_apply_cleaning_mode": False,
+    }
 
 
-def test_select_output_file_appends_extension_and_updates_cache(monkeypatch):
-    widget, cache = create_widget(monkeypatch, DummyCache({"lastOutputPath": "/old"}))
+def test_select_output_file_appends_extension_and_updates_config(monkeypatch):
+    widget, updates = create_widget(monkeypatch, {"last_output_path": "/old"})
     monkeypatch.setattr(gui.QFileDialog, "getSaveFileName", lambda *args, **kwargs: ("/tmp/output", ""))
 
     widget.select_output_file()
@@ -163,50 +180,44 @@ def test_select_output_file_appends_extension_and_updates_cache(monkeypatch):
     assert widget.outputPath == "/tmp/output.srt"
     assert widget.outputPathLabel.text == "Output File: /tmp/output.srt"
     assert widget.lastOutputPath == "/tmp"
-    assert cache["lastOutputPath"] == "/tmp"
+    assert updates[-1] == {
+        "last_input_path": "",
+        "last_output_path": "/tmp",
+        "auto_apply_cleaning_mode": False,
+    }
 
 
 def test_widget_preselects_saved_cleaning_mode_when_enabled(monkeypatch):
-    cache = DummyCache()
-    monkeypatch.setattr(gui.shelve, "open", lambda _path: cache)
-    monkeypatch.setattr(
-        gui,
-        "load_cleaning_settings",
-        lambda: {
-            "default_cleaning_mode": "basic",
-            "preselect_saved_cleaning_mode": True,
+    widget, _updates = create_widget(
+        monkeypatch,
+        {
+            "preferred_cleaning_mode": "basic",
+            "auto_apply_cleaning_mode": True,
         },
     )
-    monkeypatch.setattr(gui, "is_speechbrain_dependency_available", lambda: False)
-
-    widget = gui.SubtitlesGeneratorGUI()
 
     assert widget.cleaningModeComboBox.currentText() == "basic"
+    assert widget.autoApplyCleaningModeCheckBox.isChecked() is True
     assert widget.saveCleaningModeCheckBox.isChecked() is False
     assert widget.cleaningModeStatusLabel.text == "Basic cleaning uses the lightweight built-in preprocessing chain."
 
 
 def test_widget_defaults_cleaning_mode_to_off_when_saved_value_is_not_preselected(monkeypatch):
-    cache = DummyCache()
-    monkeypatch.setattr(gui.shelve, "open", lambda _path: cache)
-    monkeypatch.setattr(
-        gui,
-        "load_cleaning_settings",
-        lambda: {
-            "default_cleaning_mode": "basic",
-            "preselect_saved_cleaning_mode": False,
+    widget, _updates = create_widget(
+        monkeypatch,
+        {
+            "preferred_cleaning_mode": "basic",
+            "auto_apply_cleaning_mode": False,
         },
     )
-    monkeypatch.setattr(gui, "is_speechbrain_dependency_available", lambda: False)
-
-    widget = gui.SubtitlesGeneratorGUI()
 
     assert widget.cleaningModeComboBox.currentText() == "off"
+    assert widget.autoApplyCleaningModeCheckBox.isChecked() is False
     assert widget.cleaningModeStatusLabel.text == "Off uses the normalized working WAV without additional cleaning."
 
 
 def test_cleaning_mode_status_reports_unavailable_speechbrain(monkeypatch):
-    widget, _cache = create_widget(monkeypatch)
+    widget, _updates = create_widget(monkeypatch)
 
     widget.cleaningModeComboBox.setCurrentText("speechbrain")
 
@@ -216,19 +227,8 @@ def test_cleaning_mode_status_reports_unavailable_speechbrain(monkeypatch):
 
 
 def test_cleaning_mode_status_reports_runtime_validation_for_available_speechbrain(monkeypatch):
-    cache = DummyCache()
-    monkeypatch.setattr(gui.shelve, "open", lambda _path: cache)
-    monkeypatch.setattr(
-        gui,
-        "load_cleaning_settings",
-        lambda: {
-            "default_cleaning_mode": None,
-            "preselect_saved_cleaning_mode": False,
-        },
-    )
-    monkeypatch.setattr(gui, "is_speechbrain_dependency_available", lambda: True)
-
-    widget = gui.SubtitlesGeneratorGUI()
+    widget, _updates = create_widget(monkeypatch)
+    widget.speechbrainDependencyAvailable = True
     widget.cleaningModeComboBox.setCurrentText("speechbrain")
 
     assert widget.cleaningModeStatusLabel.text == (
@@ -237,7 +237,7 @@ def test_cleaning_mode_status_reports_runtime_validation_for_available_speechbra
 
 
 def test_run_script_requires_input_and_output(monkeypatch):
-    widget, _cache = create_widget(monkeypatch)
+    widget, _updates = create_widget(monkeypatch)
 
     widget.run_script()
 
@@ -246,11 +246,12 @@ def test_run_script_requires_input_and_output(monkeypatch):
 
 
 def test_run_script_starts_worker_and_disables_controls(monkeypatch):
-    widget, _cache = create_widget(monkeypatch)
+    widget, updates = create_widget(monkeypatch)
     widget.selectedFile = "/tmp/input.mp3"
     widget.outputPath = "/tmp/output.srt"
     widget.cleaningModeComboBox.setCurrentText("basic")
     widget.saveCleaningModeCheckBox.setChecked(True)
+    widget.autoApplyCleaningModeCheckBox.setChecked(True)
 
     created = {}
 
@@ -274,6 +275,15 @@ def test_run_script_starts_worker_and_disables_controls(monkeypatch):
     assert widget.btnSelectFile.disabled is True
     assert widget.btnSelectOutput.disabled is True
     assert widget.btnCancelScript.visible is True
+    assert updates[-2] == {
+        "last_input_path": "",
+        "last_output_path": "",
+        "auto_apply_cleaning_mode": True,
+    }
+    assert updates[-1] == {
+        "preferred_cleaning_mode": "basic",
+        "auto_apply_cleaning_mode": True,
+    }
     assert created["worker"].command == [
         gui.sys.executable,
         "main.py",
@@ -285,13 +295,12 @@ def test_run_script_starts_worker_and_disables_controls(monkeypatch):
         "30s",
         "--cleaning-mode",
         "basic",
-        "--save-cleaning-mode",
     ]
     assert created["thread"].started is True
 
 
 def test_run_script_blocks_unavailable_speechbrain_before_execution(monkeypatch):
-    widget, _cache = create_widget(monkeypatch)
+    widget, _updates = create_widget(monkeypatch)
     widget.selectedFile = "/tmp/input.mp3"
     widget.outputPath = "/tmp/output.srt"
     widget.cleaningModeComboBox.setCurrentText("speechbrain")
@@ -306,24 +315,14 @@ def test_run_script_blocks_unavailable_speechbrain_before_execution(monkeypatch)
 
 
 def test_run_script_blocks_speechbrain_when_runtime_validation_fails(monkeypatch):
-    cache = DummyCache()
-    monkeypatch.setattr(gui.shelve, "open", lambda _path: cache)
-    monkeypatch.setattr(
-        gui,
-        "load_cleaning_settings",
-        lambda: {
-            "default_cleaning_mode": None,
-            "preselect_saved_cleaning_mode": False,
-        },
-    )
-    monkeypatch.setattr(gui, "is_speechbrain_dependency_available", lambda: True)
+    widget, _updates = create_widget(monkeypatch)
+    widget.speechbrainDependencyAvailable = True
     monkeypatch.setattr(
         gui,
         "validate_speechbrain_runtime_ready",
         lambda: (_ for _ in ()).throw(RuntimeError("SpeechBrain enhancement is unavailable: model download failed")),
     )
 
-    widget = gui.SubtitlesGeneratorGUI()
     widget.selectedFile = "/tmp/input.mp3"
     widget.outputPath = "/tmp/output.srt"
     widget.cleaningModeComboBox.setCurrentText("speechbrain")
@@ -339,17 +338,8 @@ def test_run_script_blocks_speechbrain_when_runtime_validation_fails(monkeypatch
 
 
 def test_run_script_validates_speechbrain_then_starts_worker(monkeypatch):
-    cache = DummyCache()
-    monkeypatch.setattr(gui.shelve, "open", lambda _path: cache)
-    monkeypatch.setattr(
-        gui,
-        "load_cleaning_settings",
-        lambda: {
-            "default_cleaning_mode": None,
-            "preselect_saved_cleaning_mode": False,
-        },
-    )
-    monkeypatch.setattr(gui, "is_speechbrain_dependency_available", lambda: True)
+    widget, _updates = create_widget(monkeypatch)
+    widget.speechbrainDependencyAvailable = True
 
     created = {}
 
@@ -367,7 +357,6 @@ def test_run_script_validates_speechbrain_then_starts_worker(monkeypatch):
     monkeypatch.setattr(gui, "Worker", fake_worker_factory)
     monkeypatch.setattr(gui.threading, "Thread", fake_thread_factory)
 
-    widget = gui.SubtitlesGeneratorGUI()
     widget.selectedFile = "/tmp/input.mp3"
     widget.outputPath = "/tmp/output.srt"
     widget.cleaningModeComboBox.setCurrentText("speechbrain")
@@ -394,7 +383,7 @@ def test_run_script_validates_speechbrain_then_starts_worker(monkeypatch):
 
 
 def test_cancel_script_stops_worker_and_restores_controls(monkeypatch):
-    widget, _cache = create_widget(monkeypatch)
+    widget, _updates = create_widget(monkeypatch)
     widget.worker = FakeWorkerForGui([])
     widget.btnRunScript.setDisabled(True)
     widget.btnSelectFile.setDisabled(True)
@@ -411,7 +400,7 @@ def test_cancel_script_stops_worker_and_restores_controls(monkeypatch):
 
 
 def test_close_event_ignores_when_user_declines_running_process(monkeypatch):
-    widget, cache = create_widget(monkeypatch)
+    widget, updates = create_widget(monkeypatch)
     worker = FakeWorkerForGui([])
     worker.is_running = lambda: True
     thread = FakeThread(None)
@@ -426,16 +415,17 @@ def test_close_event_ignores_when_user_declines_running_process(monkeypatch):
     assert event.ignored is True
     assert worker.stopped is False
     assert thread.joined is False
-    assert cache.closed is False
+    assert updates == []
 
 
-def test_close_event_stops_running_process_and_closes_cache(monkeypatch):
-    widget, cache = create_widget(monkeypatch)
+def test_close_event_stops_running_process_and_persists_preferences(monkeypatch):
+    widget, updates = create_widget(monkeypatch)
     worker = FakeWorkerForGui([])
     worker.is_running = lambda: True
     thread = FakeThread(None)
     widget.worker = worker
     widget.thread = thread
+    widget.autoApplyCleaningModeCheckBox.setChecked(True)
     event = DummyEvent()
 
     monkeypatch.setattr(gui.QMessageBox, "question", lambda *args, **kwargs: gui.QMessageBox.Yes)
@@ -445,4 +435,8 @@ def test_close_event_stops_running_process_and_closes_cache(monkeypatch):
     assert event.ignored is False
     assert worker.stopped is True
     assert thread.joined is True
-    assert cache.closed is True
+    assert updates[-1] == {
+        "last_input_path": "",
+        "last_output_path": "",
+        "auto_apply_cleaning_mode": True,
+    }
