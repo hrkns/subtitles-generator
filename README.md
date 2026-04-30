@@ -18,12 +18,14 @@ Subtitles Generator is a versatile tool designed to generate subtitles (SRT file
 
 ## Installation
 
-- This application relies on **[`whisper_timestamped`](https://github.com/linto-ai/whisper-timestamped)** (among other packages) for proper functionality. Refer to its [installation](https://github.com/linto-ai/whisper-timestamped#installation) instructions for enabling it into the system.
+- This application relies on **[`whisper_timestamped`](https://github.com/linto-ai/whisper-timestamped)** for transcription and still depends on its external system prerequisites where applicable. Refer to its [installation](https://github.com/linto-ai/whisper-timestamped#installation) instructions if you need help with system-level setup such as FFmpeg.
 
-- Clone this repository or download the source code. Install the other required packages by running either `install_dependencies.cmd` or `install_dependencies.sh`.
+- Clone this repository or download the source code. Install the default runtime dependencies by running either `install_dependencies.cmd` or `install_dependencies.sh`.
+  - This base install now covers the core transcription stack plus the default `off` and `basic` cleaning modes.
 
 - To enable the optional `speechbrain` cleaning mode, install the heavier enhancement stack by running either `install_speechbrain_dependencies.cmd` or `install_speechbrain_dependencies.sh`.
   - This optional install adds the SpeechBrain inference backend used by `--cleaning-mode speechbrain`.
+  - The application detects when this optional backend is missing and reports that `speechbrain` is unavailable instead of falling back silently or failing ambiguously.
   - Downloaded model assets are cached under `audio_cache/` and are not required when using `off` or `basic`.
 
 - For local development and test execution, install the additional dependencies by running `install_dev_dependencies.cmd` or `install_dev_dependencies.sh`.

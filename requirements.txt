@@ -1,0 +1,6 @@
+whisper-timestamped
+pydub
+python-magic
+moviepy
+PyQt5
+audioop-lts
