@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import types
 from pathlib import Path
@@ -215,9 +216,50 @@ def test_resolve_cleaning_mode_defaults_to_off():
     assert process_input_module.resolve_cleaning_mode() == "off"
 
 
+def test_resolve_cleaning_mode_uses_saved_default_when_no_explicit_value(monkeypatch):
+    monkeypatch.setattr(
+        process_input_module,
+        "load_cleaning_settings",
+        lambda: {
+            "default_cleaning_mode": "basic",
+            "preselect_saved_cleaning_mode": True,
+        },
+    )
+
+    assert process_input_module.resolve_cleaning_mode() == "basic"
+
+
+def test_resolve_cleaning_mode_ignores_invalid_saved_default(monkeypatch, caplog):
+    monkeypatch.setattr(
+        process_input_module,
+        "load_cleaning_settings",
+        lambda: {
+            "default_cleaning_mode": "broken",
+            "preselect_saved_cleaning_mode": True,
+        },
+    )
+
+    with caplog.at_level(logging.WARNING):
+        assert process_input_module.resolve_cleaning_mode() == "off"
+
+    assert "Ignoring unsupported saved cleaning mode" in caplog.text
+
+
 def test_resolve_cleaning_mode_rejects_unknown_modes():
     with pytest.raises(ValueError, match="Unsupported cleaning mode 'nope'"):
         process_input_module.resolve_cleaning_mode("nope")
+
+
+def test_persist_default_cleaning_mode_saves_requested_mode(monkeypatch):
+    calls = {}
+
+    def fake_save_cleaning_settings(default_cleaning_mode, preselect_saved_cleaning_mode=True):
+        calls["save_cleaning_settings"] = (default_cleaning_mode, preselect_saved_cleaning_mode)
+
+    monkeypatch.setattr(process_input_module, "save_cleaning_settings", fake_save_cleaning_settings)
+
+    assert process_input_module.persist_default_cleaning_mode("basic") == "basic"
+    assert calls["save_cleaning_settings"] == ("basic", True)
 
 
 def test_apply_audio_cleaning_off_returns_original_working_audio():

@@ -11,7 +11,7 @@ import whisper_timestamped as whisper
 from pydub import AudioSegment, effects as audio_effects
 from pydub.exceptions import CouldntDecodeError
 from config import AUDIO_CACHE_DIR, TMP_DIR
-from modules import convert_hhmmss_to_ms, format_ms_duration
+from modules import convert_hhmmss_to_ms, format_ms_duration, load_cleaning_settings, save_cleaning_settings
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -97,13 +97,38 @@ def prepare_working_audio(input_path):
     normalize_audio_file(input_audio, working_audio_path)
     return working_audio_path, validate_audio_file(working_audio_path)
 
+def get_saved_cleaning_mode():
+    persisted_settings = load_cleaning_settings()
+    saved_mode = persisted_settings.get("default_cleaning_mode")
+
+    if not saved_mode:
+        return None
+
+    if saved_mode not in SUPPORTED_CLEANING_MODES:
+        logging.warning(
+            f"Ignoring unsupported saved cleaning mode '{saved_mode}'. Falling back to built-in default '{DEFAULT_CLEANING_MODE}'."
+        )
+        return None
+
+    logging.info(f"Using saved default cleaning mode '{saved_mode}'.")
+    return saved_mode
+
 def resolve_cleaning_mode(cleaning_mode=None):
-    resolved_mode = cleaning_mode or DEFAULT_CLEANING_MODE
+    resolved_mode = cleaning_mode
+
+    if resolved_mode is None:
+        resolved_mode = get_saved_cleaning_mode() or DEFAULT_CLEANING_MODE
 
     if resolved_mode not in SUPPORTED_CLEANING_MODES:
         supported_modes = ", ".join(SUPPORTED_CLEANING_MODES)
         raise ValueError(f"Unsupported cleaning mode '{resolved_mode}'. Supported values are: {supported_modes}.")
 
+    return resolved_mode
+
+def persist_default_cleaning_mode(cleaning_mode):
+    resolved_mode = resolve_cleaning_mode(cleaning_mode)
+    save_cleaning_settings(resolved_mode, preselect_saved_cleaning_mode=True)
+    logging.info(f"Saved default cleaning mode '{resolved_mode}'.")
     return resolved_mode
 
 def apply_basic_audio_cleaning(input_audio, output_path, output_format=WORKING_AUDIO_FORMAT):
@@ -401,7 +426,8 @@ def generate_segments_from_checkpoints(checkpoints, total_duration_ms):
 def process_input(args):
     # extract command line args and set defaults
     checkpoints = args.checkpoints
-    cleaning_mode = resolve_cleaning_mode(getattr(args, "cleaning_mode", None))
+    explicit_cleaning_mode = getattr(args, "cleaning_mode", None)
+    cleaning_mode = resolve_cleaning_mode(explicit_cleaning_mode)
     segments = args.segments
     input_path = args.input
     audio_language = args.language or 'en'
@@ -416,6 +442,12 @@ def process_input(args):
     # Create the temporary directory if it doesn't exist
     if not os.path.exists(TMP_DIR):
         os.makedirs(TMP_DIR)
+
+    if getattr(args, "save_cleaning_mode", False) and explicit_cleaning_mode is not None:
+        try:
+            persist_default_cleaning_mode(explicit_cleaning_mode)
+        except Exception as e:
+            logging.error(f"Could not persist cleaning mode '{cleaning_mode}': {str(e)}")
 
     # Prepare the normalized and optionally cleaned working audio used by transcription.
     transcription_audio_path, input_audio = prepare_transcription_audio(input_path, cleaning_mode)

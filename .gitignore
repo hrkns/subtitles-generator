@@ -154,3 +154,4 @@ cython_debug/
 tmp
 src
 .cache*
+.cleaning-settings.json

@@ -34,7 +34,14 @@ The current CLI-supported modes are:
 - `basic`: apply a lightweight Pydub-based cleanup chain
 - `speechbrain`: apply SpeechBrain enhancement when its optional dependencies are available
 
-The GUI selector and saved default preference are still in progress.
+The CLI can also persist a chosen cleaning mode as the new default for future runs.
+If `--cleaning-mode` is omitted, the CLI resolves the effective mode in this order:
+
+- explicit per-run `--cleaning-mode`
+- saved default cleaning mode from `./.cleaning-settings.json`
+- built-in default `off`
+
+The GUI selector is still in progress.
 
 The current implementation target for this branch is documented in [Audio Cleaning Behavior Contract](docs/audio-cleaning-behavior-contract.md). It defines the planned cleaning modes (`off`, `basic`, and `speechbrain`), the precedence between per-run choice and saved defaults, and the rule that unavailable cleaning backends must fail explicitly instead of silently falling back.
 
@@ -101,6 +108,8 @@ The application can also be initiated with specific parameters detailed below:
   - `basic` uses the built-in lightweight cleanup chain and does not require extra model downloads.
   - `speechbrain` requires the optional SpeechBrain enhancement dependencies and a first-run model download.
 
+- `--save-cleaning-mode`: Persist the provided `--cleaning-mode` value as the new default for future runs. This flag requires `--cleaning-mode`.
+
 ### Examples:
 
 1. Basic usage with mandatory parameters:
@@ -155,6 +164,12 @@ python main.py -i /path/to/audio.mp3 --cleaning-mode basic
 
 ```
 python main.py -i /path/to/audio.mp3 --cleaning-mode speechbrain
+```
+
+10. Saving a preferred cleaning mode for future runs:
+
+```
+python main.py -i /path/to/audio.mp3 --cleaning-mode basic --save-cleaning-mode
 ```
 
 ## Testing

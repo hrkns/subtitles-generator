@@ -1,3 +1,4 @@
+import logging
 import os
 import runpy
 from types import SimpleNamespace
@@ -32,6 +33,7 @@ def test_execution_args_parses_runtime_flags(monkeypatch):
             "5m",
             "--cleaning-mode",
             "basic",
+            "--save-cleaning-mode",
             "--language",
             "es",
             "--merge",
@@ -44,6 +46,7 @@ def test_execution_args_parses_runtime_flags(monkeypatch):
     assert args.output == "output.srt"
     assert args.checkpoints == "5m"
     assert args.cleaning_mode == "basic"
+    assert args.save_cleaning_mode is True
     assert args.language == "es"
     assert args.merge is True
     assert args.version is False
@@ -56,11 +59,19 @@ def test_execution_args_parses_version_flag(monkeypatch):
 
     assert args.version is True
     assert args.cleaning_mode is None
+    assert args.save_cleaning_mode is False
     assert args.input is None
 
 
 def test_execution_args_rejects_invalid_cleaning_mode(monkeypatch):
     monkeypatch.setattr("sys.argv", ["main.py", "--input", "input.mp3", "--cleaning-mode", "invalid"])
+
+    with pytest.raises(SystemExit):
+        execution_args()
+
+
+def test_execution_args_rejects_saving_without_explicit_cleaning_mode(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["main.py", "--input", "input.mp3", "--save-cleaning-mode"])
 
     with pytest.raises(SystemExit):
         execution_args()
@@ -165,6 +176,108 @@ def test_process_input_uses_video_extraction_and_default_full_range(tmp_path, mo
         "fake-model",
         os.path.join(process_input_module.TMP_DIR, "speech_recognition_result_segment_{}.json"),
     )
+
+
+def test_process_input_uses_saved_cleaning_mode_when_no_explicit_selection(tmp_path, monkeypatch):
+    tmp_dir = tmp_path / "tmp"
+    monkeypatch.setattr(process_input_module, "TMP_DIR", f"{tmp_dir}{os.sep}")
+
+    calls = {}
+    fake_audio = FakeAudio(42000)
+
+    monkeypatch.setattr(
+        process_input_module,
+        "load_cleaning_settings",
+        lambda: {
+            "default_cleaning_mode": "basic",
+            "preselect_saved_cleaning_mode": True,
+        },
+    )
+
+    def fake_prepare_transcription_audio(input_path, cleaning_mode):
+        calls["prepare_transcription_audio"] = (input_path, cleaning_mode)
+        return (os.path.join(process_input_module.TMP_DIR, process_input_module.WORKING_AUDIO_FILENAME), fake_audio)
+
+    def fake_process_audio_segments(input_audio, segments_to_process, audio_language, speech_to_text_model, output_json_template):
+        calls["process_audio_segments"] = (
+            input_audio,
+            segments_to_process,
+            audio_language,
+            speech_to_text_model,
+            output_json_template,
+        )
+
+    monkeypatch.setattr(process_input_module, "prepare_transcription_audio", fake_prepare_transcription_audio)
+    monkeypatch.setattr(process_input_module.whisper, "load_model", lambda model_name: "fake-model")
+    monkeypatch.setattr(process_input_module, "process_audio_segments", fake_process_audio_segments)
+
+    args = SimpleNamespace(
+        input="input.mp3",
+        checkpoints=None,
+        segments=None,
+        language=None,
+        cleaning_mode=None,
+        save_cleaning_mode=False,
+    )
+
+    process_input_module.process_input(args)
+
+    assert calls["prepare_transcription_audio"] == ("input.mp3", "basic")
+    assert calls["process_audio_segments"] == (
+        fake_audio,
+        [(0, 42000)],
+        "en",
+        "fake-model",
+        os.path.join(process_input_module.TMP_DIR, "speech_recognition_result_segment_{}.json"),
+    )
+
+
+def test_process_input_continues_when_persisting_cleaning_mode_fails(tmp_path, monkeypatch, caplog):
+    tmp_dir = tmp_path / "tmp"
+    monkeypatch.setattr(process_input_module, "TMP_DIR", f"{tmp_dir}{os.sep}")
+
+    calls = {}
+    fake_audio = FakeAudio(42000)
+
+    def fake_prepare_transcription_audio(input_path, cleaning_mode):
+        calls["prepare_transcription_audio"] = (input_path, cleaning_mode)
+        return (os.path.join(process_input_module.TMP_DIR, process_input_module.WORKING_AUDIO_FILENAME), fake_audio)
+
+    def fake_process_audio_segments(input_audio, segments_to_process, audio_language, speech_to_text_model, output_json_template):
+        calls["process_audio_segments"] = (
+            input_audio,
+            segments_to_process,
+            audio_language,
+            speech_to_text_model,
+            output_json_template,
+        )
+
+    monkeypatch.setattr(process_input_module, "prepare_transcription_audio", fake_prepare_transcription_audio)
+    monkeypatch.setattr(process_input_module, "save_cleaning_settings", lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("disk full")))
+    monkeypatch.setattr(process_input_module.whisper, "load_model", lambda model_name: "fake-model")
+    monkeypatch.setattr(process_input_module, "process_audio_segments", fake_process_audio_segments)
+
+    args = SimpleNamespace(
+        input="input.mp3",
+        checkpoints=None,
+        segments=None,
+        language=None,
+        cleaning_mode="basic",
+        save_cleaning_mode=True,
+    )
+
+    with caplog.at_level(logging.ERROR):
+        process_input_module.process_input(args)
+
+    assert calls["prepare_transcription_audio"] == ("input.mp3", "basic")
+    assert calls["process_audio_segments"] == (
+        fake_audio,
+        [(0, 42000)],
+        "en",
+        "fake-model",
+        os.path.join(process_input_module.TMP_DIR, "speech_recognition_result_segment_{}.json"),
+    )
+    assert "Could not persist cleaning mode 'basic': disk full" in caplog.text
 
 
 def test_process_input_uses_explicit_segments(monkeypatch):
