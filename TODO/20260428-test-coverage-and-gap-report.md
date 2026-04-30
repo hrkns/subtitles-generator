@@ -180,29 +180,27 @@ These are mostly:
 
 Given current coverage levels of `98%` and `97%`, these are not blockers.
 
-## 3. Confirmed Behavioral Gap Discovered During Review
+## 3. Previously Confirmed Gap Since Closed
 
 ### Temporary segment cleanup on transcription failure
 
-The current test `test_process_audio_segments_wraps_transcription_failures` verifies that a `RuntimeError` is raised and that no JSON output file is created.
+This issue was addressed during the audio-cleaning integration work.
 
-However, an additional manual probe confirmed that when transcription fails, the temporary exported segment file remains on disk.
+Current behavior:
 
-Observed behavior:
+- `process_audio_segments()` exports temporary segment audio as lossless `temp_segment_1.wav`
+- `whisper.transcribe()` failures are wrapped in a `RuntimeError`
+- the temporary segment file is removed in a `finally` block before the exception escapes
 
-- `process_audio_segments()` exports `temp_segment_1.mp3`
-- `whisper.transcribe()` raises
-- the temporary segment file is not removed before the exception escapes
+Why this still matters:
 
-Why this matters:
+- the temp segment now stays aligned with the lossless working-audio pipeline
+- repeated failures no longer leave temporary artifacts behind
 
-- repeated failures can leave temporary artifacts behind
-- it is a cleanup defect, not just a missing test
+Regression coverage:
 
-Recommended action:
-
-- either fix `process_audio_segments()` to remove temporary files in a `finally` block
-- or explicitly document and test the intended retention behavior if keeping those files is desired
+- `test_process_audio_segments_exports_transcribes_and_writes_json`
+- `test_process_audio_segments_wraps_transcription_failures`
 
 ## 4. Areas That Are Still Only Partially Asserted
 
