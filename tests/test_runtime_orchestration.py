@@ -63,12 +63,6 @@ def test_process_input_uses_checkpoint_flow_for_audio_input(tmp_path, monkeypatc
     fake_audio = FakeAudio(65000)
     expected_segments = [(0, 30000), (30000, 65000)]
 
-    monkeypatch.setattr(process_input_module, "is_video_file", lambda input_path: False)
-
-    def fake_validate_audio_file(file_path):
-        calls["validate_audio_file"] = file_path
-        return fake_audio
-
     def fake_generate_segments(checkpoints, total_duration_ms):
         calls["generate_segments"] = (checkpoints, total_duration_ms)
         return expected_segments
@@ -89,7 +83,11 @@ def test_process_input_uses_checkpoint_flow_for_audio_input(tmp_path, monkeypatc
             output_json_template,
         )
 
-    monkeypatch.setattr(process_input_module, "validate_audio_file", fake_validate_audio_file)
+    monkeypatch.setattr(
+        process_input_module,
+        "prepare_working_audio",
+        lambda input_path: (os.path.join(process_input_module.TMP_DIR, process_input_module.WORKING_AUDIO_FILENAME), fake_audio),
+    )
     monkeypatch.setattr(process_input_module, "generate_segments_from_checkpoints", fake_generate_segments)
     monkeypatch.setattr(process_input_module, "parse_segments", fail_parse_segments)
     monkeypatch.setattr(process_input_module.whisper, "load_model", fake_load_model)
@@ -100,7 +98,6 @@ def test_process_input_uses_checkpoint_flow_for_audio_input(tmp_path, monkeypatc
     process_input_module.process_input(args)
 
     assert tmp_dir.exists()
-    assert calls["validate_audio_file"] == "input.mp3"
     assert calls["generate_segments"] == ("30s", 65000)
     assert calls["load_model"] == "tiny"
     assert calls["process_audio_segments"] == (
@@ -108,7 +105,7 @@ def test_process_input_uses_checkpoint_flow_for_audio_input(tmp_path, monkeypatc
         expected_segments,
         "en",
         "fake-model",
-        f"{process_input_module.TMP_DIR}speech_recognition_result_segment_{{}}.json",
+        os.path.join(process_input_module.TMP_DIR, "speech_recognition_result_segment_{}.json"),
     )
 
 
@@ -118,15 +115,6 @@ def test_process_input_uses_video_extraction_and_default_full_range(tmp_path, mo
 
     calls = {}
     fake_audio = FakeAudio(42000)
-
-    monkeypatch.setattr(process_input_module, "is_video_file", lambda input_path: True)
-
-    def fake_extract_audio(video_path, audio_path):
-        calls["extract_audio"] = (video_path, audio_path)
-
-    def fake_validate_audio_file(file_path):
-        calls["validate_audio_file"] = file_path
-        return fake_audio
 
     def fail_generate_segments(*_args, **_kwargs):
         raise AssertionError("generate_segments_from_checkpoints should not be used without checkpoints")
@@ -143,8 +131,11 @@ def test_process_input_uses_video_extraction_and_default_full_range(tmp_path, mo
             output_json_template,
         )
 
-    monkeypatch.setattr(process_input_module, "extract_audio", fake_extract_audio)
-    monkeypatch.setattr(process_input_module, "validate_audio_file", fake_validate_audio_file)
+    def fake_prepare_working_audio(input_path):
+        calls["prepare_working_audio"] = input_path
+        return (os.path.join(process_input_module.TMP_DIR, process_input_module.WORKING_AUDIO_FILENAME), fake_audio)
+
+    monkeypatch.setattr(process_input_module, "prepare_working_audio", fake_prepare_working_audio)
     monkeypatch.setattr(process_input_module, "generate_segments_from_checkpoints", fail_generate_segments)
     monkeypatch.setattr(process_input_module, "parse_segments", fail_parse_segments)
     monkeypatch.setattr(process_input_module.whisper, "load_model", lambda model_name: "fake-model")
@@ -154,15 +145,13 @@ def test_process_input_uses_video_extraction_and_default_full_range(tmp_path, mo
 
     process_input_module.process_input(args)
 
-    expected_audio_path = f"{process_input_module.TMP_DIR}input_audio.mp3"
-    assert calls["extract_audio"] == ("input.mp4", expected_audio_path)
-    assert calls["validate_audio_file"] == expected_audio_path
+    assert calls["prepare_working_audio"] == "input.mp4"
     assert calls["process_audio_segments"] == (
         fake_audio,
         [(0, 42000)],
         "es",
         "fake-model",
-        f"{process_input_module.TMP_DIR}speech_recognition_result_segment_{{}}.json",
+        os.path.join(process_input_module.TMP_DIR, "speech_recognition_result_segment_{}.json"),
     )
 
 
@@ -171,8 +160,11 @@ def test_process_input_uses_explicit_segments(monkeypatch):
     fake_audio = FakeAudio(99000)
     expected_segments = [(1000, 5000)]
 
-    monkeypatch.setattr(process_input_module, "is_video_file", lambda input_path: False)
-    monkeypatch.setattr(process_input_module, "validate_audio_file", lambda file_path: fake_audio)
+    monkeypatch.setattr(
+        process_input_module,
+        "prepare_working_audio",
+        lambda input_path: (os.path.join(process_input_module.TMP_DIR, process_input_module.WORKING_AUDIO_FILENAME), fake_audio),
+    )
     monkeypatch.setattr(
         process_input_module,
         "generate_segments_from_checkpoints",

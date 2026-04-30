@@ -4,7 +4,7 @@ Subtitles Generator is a versatile tool designed to generate subtitles (SRT file
 
 ## Features
 
-- Support for input in MP3 audio format and video format.
+- Support for input in MP3 and WAV audio formats, plus video input.
 - Customizable checkpoints for subtitle segments.
 - Ability to specify specific audio segments for processing.
 - Language specification for the audio content.
@@ -51,8 +51,10 @@ The application can also be initiated with specific parameters detailed below:
 
 #### Mandatory Arguments:
 
-- `-i` or `--input`: The path to the input audio file in MP3 format or video format. This argument is required.
+- `-i` or `--input`: The path to the input audio file in supported audio format or video format. This argument is required.
   - If audio is provided, then the final result will be more accurate if the input audio is clean and contains only voices. Automatic cleaning is being implemented in this branch; until it is available in the CLI and GUI, use software like **[UVR](https://github.com/Anjok07/ultimatevocalremovergui)** when you need to clean audio before running the tool.
+
+The current backend normalizes accepted input into an internal WAV working file before segmentation and transcription.
 
 #### Optional Arguments:
 

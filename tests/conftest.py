@@ -57,6 +57,10 @@ def _install_stub_modules():
                 return format
 
             @staticmethod
+            def from_file(_file_path):
+                return _AudioSegment()
+
+            @staticmethod
             def from_mp3(_file_path):
                 return _AudioSegment()
 

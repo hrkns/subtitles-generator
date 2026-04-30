@@ -15,21 +15,22 @@ from modules import convert_hhmmss_to_ms, format_ms_duration
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 
+WORKING_AUDIO_FORMAT = "wav"
+WORKING_AUDIO_FILENAME = f"working_input_audio.{WORKING_AUDIO_FORMAT}"
+
 def validate_audio_file(file_path):
-    # TODO: Expand validation to support more audio formats.
     if not os.path.exists(file_path):
         logging.error("The provided audio file does not exist.")
         sys.exit(1)
 
-    if not file_path.lower().endswith('.mp3'):
-        logging.error("Unsupported file format. Currently only MP3 is supported.")
-        sys.exit(1)
-
     try:
-        audio = AudioSegment.from_mp3(file_path)
+        audio = AudioSegment.from_file(file_path)
         return audio
     except CouldntDecodeError:
-        logging.error("Could not decode audio file. Please ensure it's a valid MP3 file.")
+        logging.error("Could not decode audio file. Please ensure it's a valid audio file.")
+        sys.exit(1)
+    except Exception:
+        logging.error("Could not decode audio file. Please ensure it's a valid audio file.")
         sys.exit(1)
 
 def is_video_file(file_path):
@@ -62,12 +63,33 @@ def extract_audio(video_path, audio_path):
     :param video_path: str, The path to the video file.
     :param audio_path: str, The path to save the extracted audio file.
     """
+    video = None
     try:
         video = AudioFileClip(video_path)
         video.write_audiofile(audio_path)
         print(f"Audio extracted and saved to {audio_path}")
     except Exception as e:
         print(f"An error occurred: {e}")
+    finally:
+        if video is not None and hasattr(video, "close"):
+            video.close()
+
+def normalize_audio_file(input_audio, output_path, output_format=WORKING_AUDIO_FORMAT):
+    logging.info(f"Normalizing audio to {output_format.upper()} working file...")
+    input_audio.export(output_path, format=output_format)
+    logging.info(f"Normalized audio saved to {output_path}")
+    return output_path
+
+def prepare_working_audio(input_path):
+    working_audio_path = os.path.join(TMP_DIR, WORKING_AUDIO_FILENAME)
+
+    if is_video_file(input_path):
+        extract_audio(input_path, working_audio_path)
+        return working_audio_path, validate_audio_file(working_audio_path)
+
+    input_audio = validate_audio_file(input_path)
+    normalize_audio_file(input_audio, working_audio_path)
+    return working_audio_path, validate_audio_file(working_audio_path)
 
 def parse_segments(segments_str, total_duration_ms):
     segments = []
@@ -151,29 +173,30 @@ def process_audio_segments(input_audio, segments_to_process, audio_language, spe
         # Save the audio segment to a temporary file
         # TODO: if a single segment is provided, don't create a temporary file, instead use the original input audio file directly, for optimization.
         logging.info("Creating tmp audio segment...")
-        output_format = "mp3"
-        temp_audio_file = f"{TMP_DIR}temp_segment_{segment_number}.{output_format}"
+        output_format = WORKING_AUDIO_FORMAT
+        temp_audio_file = os.path.join(TMP_DIR, f"temp_segment_{segment_number}.{output_format}")
         audio_segment.export(temp_audio_file, format=output_format)
         logging.info("Created temporary audio segment.")
 
-        # Transcribe the audio segment
-        logging.info("Transforming speech segment to text...")
-        segment_audio = whisper.load_audio(temp_audio_file)
-        logging.info("Loaded audio segment. Transcribing...")
         try:
-            result = whisper.transcribe(speech_to_text_model, segment_audio, language=audio_language)
-        except Exception as e:
-            raise RuntimeError(f"An error occurred while transcribing the audio segment #{segment_number}: {str(e)}")
-        logging.info("Transformed speech segment to text. Writing to tmp JSON file...")
+            # Transcribe the audio segment
+            logging.info("Transforming speech segment to text...")
+            segment_audio = whisper.load_audio(temp_audio_file)
+            logging.info("Loaded audio segment. Transcribing...")
+            try:
+                result = whisper.transcribe(speech_to_text_model, segment_audio, language=audio_language)
+            except Exception as e:
+                raise RuntimeError(f"An error occurred while transcribing the audio segment #{segment_number}: {str(e)}")
+            logging.info("Transformed speech segment to text. Writing to tmp JSON file...")
 
-        # Save the result to a JSON file
-        output_json_file = output_json_template.format(format_ms_duration(segment_start) + "_" + format_ms_duration(segment_end))
-        with open(output_json_file, 'w', encoding='utf-8') as file:
-            json.dump(result, file, ensure_ascii=False, indent=2)
-        logging.info(f'Content has been written to the file {output_json_file}')
-
-        # Remove the temporary audio file
-        os.remove(temp_audio_file)
+            # Save the result to a JSON file
+            output_json_file = output_json_template.format(format_ms_duration(segment_start) + "_" + format_ms_duration(segment_end))
+            with open(output_json_file, 'w', encoding='utf-8') as file:
+                json.dump(result, file, ensure_ascii=False, indent=2)
+            logging.info(f'Content has been written to the file {output_json_file}')
+        finally:
+            if os.path.exists(temp_audio_file):
+                os.remove(temp_audio_file)
 
         logging.info(f"Completed processing for segment {segment_number}")
 
@@ -306,17 +329,8 @@ def process_input(args):
     if not os.path.exists(TMP_DIR):
         os.makedirs(TMP_DIR)
 
-    # Extract the audio from the video file if the input is a video
-    input_audio_path = ''
-    if is_video_file(input_path):
-        input_audio_path = TMP_DIR + "input_audio.mp3"
-        extract_audio(input_path, input_audio_path)
-    # Otherwise, assume the input is an audio file
-    else:
-        input_audio_path = input_path
-
-    # Validate the input audio file and rewrite path if necessary
-    input_audio = validate_audio_file(input_audio_path)
+    # Convert the input into a normalized working audio file used by transcription.
+    working_audio_path, input_audio = prepare_working_audio(input_path)
 
     # Get the total duration of the audio in milliseconds
     total_duration_ms = len(input_audio)
@@ -340,5 +354,5 @@ def process_input(args):
     # Process the audio segments
     # The speech to text result for each segment will be saved to a JSON file.
     # The content of the generated JSON files is used then in the generate_output.py script as input to generate the final subtitles output.
-    output_json_template = TMP_DIR + "speech_recognition_result_segment_{}.json"
+    output_json_template = os.path.join(TMP_DIR, "speech_recognition_result_segment_{}.json")
     process_audio_segments(input_audio, segments_to_process, audio_language, speech_to_text_model, output_json_template)
