@@ -166,6 +166,37 @@ def _install_stub_modules():
             def show(self):
                 self.visible = True
 
+        class QComboBox:
+            def __init__(self):
+                self.items = []
+                self._current_text = ""
+                self.currentTextChanged = _BoundSignal()
+
+            def addItems(self, items):
+                self.items.extend(items)
+                if not self._current_text and self.items:
+                    self._current_text = self.items[0]
+
+            def currentText(self):
+                return self._current_text
+
+            def setCurrentText(self, text):
+                if text not in self.items:
+                    self.items.append(text)
+                self._current_text = text
+                self.currentTextChanged.emit(text)
+
+        class QCheckBox:
+            def __init__(self, text=""):
+                self.text = text
+                self.checked = False
+
+            def setChecked(self, value):
+                self.checked = value
+
+            def isChecked(self):
+                return self.checked
+
         class QTextEdit:
             def __init__(self):
                 self.lines = []
@@ -221,6 +252,8 @@ def _install_stub_modules():
         qtcore_module.pyqtSignal = pyqtSignal
         qtgui_module.QIcon = QIcon
         qtwidgets_module.QApplication = QApplication
+        qtwidgets_module.QCheckBox = QCheckBox
+        qtwidgets_module.QComboBox = QComboBox
         qtwidgets_module.QFileDialog = QFileDialog
         qtwidgets_module.QLabel = QLabel
         qtwidgets_module.QMessageBox = QMessageBox

@@ -2,9 +2,23 @@ import sys
 import subprocess
 import threading
 import shelve
+import importlib
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QTextEdit, QLabel, QFileDialog, QMessageBox
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QTextEdit, QLabel, QFileDialog, QMessageBox, QComboBox, QCheckBox
 from PyQt5.QtCore import pyqtSignal, QObject 
+from modules import load_cleaning_settings
+
+
+SUPPORTED_CLEANING_MODES = ("off", "basic", "speechbrain")
+DEFAULT_CLEANING_MODE = "off"
+
+
+def is_speechbrain_dependency_available():
+    try:
+        importlib.import_module("speechbrain.inference.enhancement")
+        return True
+    except Exception:
+        return False
 
 class Worker(QObject):
     output = pyqtSignal(str)
@@ -63,6 +77,20 @@ class SubtitlesGeneratorGUI(QWidget):
         self.btnSelectOutput.clicked.connect(self.select_output_file)
         layout.addWidget(self.btnSelectOutput)
 
+        self.cleaningModeTitleLabel = QLabel("Cleaning Mode")
+        layout.addWidget(self.cleaningModeTitleLabel)
+
+        self.cleaningModeComboBox = QComboBox()
+        self.cleaningModeComboBox.addItems(list(SUPPORTED_CLEANING_MODES))
+        self.cleaningModeComboBox.currentTextChanged.connect(self.update_cleaning_mode_status)
+        layout.addWidget(self.cleaningModeComboBox)
+
+        self.saveCleaningModeCheckBox = QCheckBox("Save selected cleaning mode as default for future runs")
+        layout.addWidget(self.saveCleaningModeCheckBox)
+
+        self.cleaningModeStatusLabel = QLabel("")
+        layout.addWidget(self.cleaningModeStatusLabel)
+
         self.logTextEdit = QTextEdit()
         layout.addWidget(self.logTextEdit)
 
@@ -90,6 +118,59 @@ class SubtitlesGeneratorGUI(QWidget):
             self.lastOutputPath = self.cache.get("lastOutputPath", "")
         except Exception as e:
             self.lastOutputPath = ""
+
+        self.speechbrainDependencyAvailable = is_speechbrain_dependency_available()
+        self.cleaningSettings = load_cleaning_settings()
+        self.cleaningModeComboBox.setCurrentText(self.resolve_initial_cleaning_mode())
+        self.saveCleaningModeCheckBox.setChecked(False)
+        self.update_cleaning_mode_status(self.cleaningModeComboBox.currentText())
+
+    def resolve_initial_cleaning_mode(self):
+        saved_mode = self.cleaningSettings.get("default_cleaning_mode")
+        should_preselect_saved_mode = self.cleaningSettings.get("preselect_saved_cleaning_mode", False)
+
+        if should_preselect_saved_mode and saved_mode in SUPPORTED_CLEANING_MODES:
+            return saved_mode
+
+        return DEFAULT_CLEANING_MODE
+
+    def update_cleaning_mode_status(self, selected_mode):
+        if selected_mode == "speechbrain":
+            if self.speechbrainDependencyAvailable:
+                self.cleaningModeStatusLabel.setText(
+                    "SpeechBrain enhancement is available. The first run may download model assets."
+                )
+            else:
+                self.cleaningModeStatusLabel.setText(
+                    "SpeechBrain enhancement is unavailable. Install the optional SpeechBrain dependencies before using this mode."
+                )
+        elif selected_mode == "basic":
+            self.cleaningModeStatusLabel.setText(
+                "Basic cleaning uses the lightweight built-in preprocessing chain."
+            )
+        else:
+            self.cleaningModeStatusLabel.setText(
+                "Off uses the normalized working WAV without additional cleaning."
+            )
+
+    def build_command(self):
+        command = [
+            "python",
+            "main.py",
+            "--input",
+            self.selectedFile,
+            "--output",
+            self.outputPath,
+            "--checkpoints",
+            "30s",
+            "--cleaning-mode",
+            self.cleaningModeComboBox.currentText(),
+        ]
+
+        if self.saveCleaningModeCheckBox.isChecked():
+            command.append("--save-cleaning-mode")
+
+        return command
 
     def select_file(self):
         # File selection dialog
@@ -134,6 +215,11 @@ class SubtitlesGeneratorGUI(QWidget):
         if not self.selectedFile or not self.outputPath:
             self.logTextEdit.append("No input or output file selected.")
             return
+        elif self.cleaningModeComboBox.currentText() == "speechbrain" and not self.speechbrainDependencyAvailable:
+            self.logTextEdit.append(
+                "SpeechBrain enhancement is unavailable. Install the optional SpeechBrain dependencies before running with this mode."
+            )
+            return
         else:
             # Clear the log text edit and initialize it back
             self.logTextEdit.clear()
@@ -146,7 +232,7 @@ class SubtitlesGeneratorGUI(QWidget):
         self.btnCancelScript.show()
 
         # Prepare and start the script execution thread
-        command = ["python", "main.py", "--input", self.selectedFile, "--output", self.outputPath, "--checkpoints", "30s"]
+        command = self.build_command()
         self.worker = Worker(command)
         self.worker.output.connect(self.logTextEdit.append)
         self.worker.finished.connect(self.script_finished)

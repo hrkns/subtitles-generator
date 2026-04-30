@@ -41,7 +41,8 @@ If `--cleaning-mode` is omitted, the CLI resolves the effective mode in this ord
 - saved default cleaning mode from `./.cleaning-settings.json`
 - built-in default `off`
 
-The GUI selector is still in progress.
+The GUI now exposes the same cleaning-mode selection and save-default control as the CLI.
+When `speechbrain` is selected, the GUI shows whether its optional dependencies are currently available before execution starts.
 
 The current implementation target for this branch is documented in [Audio Cleaning Behavior Contract](docs/audio-cleaning-behavior-contract.md). It defines the planned cleaning modes (`off`, `basic`, and `speechbrain`), the precedence between per-run choice and saved defaults, and the rule that unavailable cleaning backends must fail explicitly instead of silently falling back.
 
@@ -77,7 +78,11 @@ python gui.py
 
 In the GUI, you can easily set the input file and the output path. Once all parameters are set, simply click the 'Generate' button to start the subtitle creation process. All the other arguments used in the CLI option will be translated into proper GUI controls in the future.
 
-The GUI does not yet expose the cleaning-mode selector. Use the CLI if you want to choose `basic` or `speechbrain` right now.
+The GUI now includes:
+
+- a cleaning-mode selector with `off`, `basic`, and `speechbrain`
+- a checkbox to save the selected mode as the default for future runs
+- a status message that explains the selected mode and warns when `speechbrain` is unavailable
 
 ![Alt text](assets/img/gui.png)
 

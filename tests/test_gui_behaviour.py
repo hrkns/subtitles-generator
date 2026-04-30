@@ -93,6 +93,15 @@ class FakeWorkerForGui:
 def create_widget(monkeypatch, cache=None):
     fake_cache = cache or DummyCache()
     monkeypatch.setattr(gui.shelve, "open", lambda _path: fake_cache)
+    monkeypatch.setattr(
+        gui,
+        "load_cleaning_settings",
+        lambda: {
+            "default_cleaning_mode": None,
+            "preselect_saved_cleaning_mode": False,
+        },
+    )
+    monkeypatch.setattr(gui, "is_speechbrain_dependency_available", lambda: False)
     return gui.SubtitlesGeneratorGUI(), fake_cache
 
 
@@ -157,6 +166,55 @@ def test_select_output_file_appends_extension_and_updates_cache(monkeypatch):
     assert cache["lastOutputPath"] == "/tmp"
 
 
+def test_widget_preselects_saved_cleaning_mode_when_enabled(monkeypatch):
+    cache = DummyCache()
+    monkeypatch.setattr(gui.shelve, "open", lambda _path: cache)
+    monkeypatch.setattr(
+        gui,
+        "load_cleaning_settings",
+        lambda: {
+            "default_cleaning_mode": "basic",
+            "preselect_saved_cleaning_mode": True,
+        },
+    )
+    monkeypatch.setattr(gui, "is_speechbrain_dependency_available", lambda: False)
+
+    widget = gui.SubtitlesGeneratorGUI()
+
+    assert widget.cleaningModeComboBox.currentText() == "basic"
+    assert widget.saveCleaningModeCheckBox.isChecked() is False
+    assert widget.cleaningModeStatusLabel.text == "Basic cleaning uses the lightweight built-in preprocessing chain."
+
+
+def test_widget_defaults_cleaning_mode_to_off_when_saved_value_is_not_preselected(monkeypatch):
+    cache = DummyCache()
+    monkeypatch.setattr(gui.shelve, "open", lambda _path: cache)
+    monkeypatch.setattr(
+        gui,
+        "load_cleaning_settings",
+        lambda: {
+            "default_cleaning_mode": "basic",
+            "preselect_saved_cleaning_mode": False,
+        },
+    )
+    monkeypatch.setattr(gui, "is_speechbrain_dependency_available", lambda: False)
+
+    widget = gui.SubtitlesGeneratorGUI()
+
+    assert widget.cleaningModeComboBox.currentText() == "off"
+    assert widget.cleaningModeStatusLabel.text == "Off uses the normalized working WAV without additional cleaning."
+
+
+def test_cleaning_mode_status_reports_unavailable_speechbrain(monkeypatch):
+    widget, _cache = create_widget(monkeypatch)
+
+    widget.cleaningModeComboBox.setCurrentText("speechbrain")
+
+    assert widget.cleaningModeStatusLabel.text == (
+        "SpeechBrain enhancement is unavailable. Install the optional SpeechBrain dependencies before using this mode."
+    )
+
+
 def test_run_script_requires_input_and_output(monkeypatch):
     widget, _cache = create_widget(monkeypatch)
 
@@ -170,6 +228,8 @@ def test_run_script_starts_worker_and_disables_controls(monkeypatch):
     widget, _cache = create_widget(monkeypatch)
     widget.selectedFile = "/tmp/input.mp3"
     widget.outputPath = "/tmp/output.srt"
+    widget.cleaningModeComboBox.setCurrentText("basic")
+    widget.saveCleaningModeCheckBox.setChecked(True)
 
     created = {}
 
@@ -202,8 +262,26 @@ def test_run_script_starts_worker_and_disables_controls(monkeypatch):
         "/tmp/output.srt",
         "--checkpoints",
         "30s",
+        "--cleaning-mode",
+        "basic",
+        "--save-cleaning-mode",
     ]
     assert created["thread"].started is True
+
+
+def test_run_script_blocks_unavailable_speechbrain_before_execution(monkeypatch):
+    widget, _cache = create_widget(monkeypatch)
+    widget.selectedFile = "/tmp/input.mp3"
+    widget.outputPath = "/tmp/output.srt"
+    widget.cleaningModeComboBox.setCurrentText("speechbrain")
+
+    widget.run_script()
+
+    assert widget.logTextEdit.lines == [
+        "SpeechBrain enhancement is unavailable. Install the optional SpeechBrain dependencies before running with this mode."
+    ]
+    assert not hasattr(widget, "worker")
+    assert widget.btnRunScript.disabled is False
 
 
 def test_cancel_script_stops_worker_and_restores_controls(monkeypatch):
