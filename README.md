@@ -1,10 +1,10 @@
 # Subtitles Generator
 
-Subtitles Generator is a versatile tool designed to generate subtitles (SRT files) from audio files (MP3 format) or video files. It leverages advanced processing to interpret audio content and create time-stamped subtitles suitable for various applications. This tool is built on the **[`whisper_timestamped`](https://github.com/linto-ai/whisper-timestamped)** package and now includes a user-friendly graphical user interface (GUI) for easier operation.
+Subtitles Generator is a versatile tool designed to generate subtitles (SRT files) from audio files or video files. It leverages advanced processing to interpret audio content and create time-stamped subtitles suitable for various applications. This tool is built on the **[`whisper_timestamped`](https://github.com/linto-ai/whisper-timestamped)** package and now includes a user-friendly graphical user interface (GUI) for easier operation.
 
 ## Features
 
-- Support for input in MP3 and WAV audio formats, plus video input.
+- Support for guaranteed input in MP3 and WAV audio files, plus MP4 and AVI video files.
 - Customizable checkpoints for subtitle segments.
 - Ability to specify specific audio segments for processing.
 - Language specification for the audio content.
@@ -29,6 +29,24 @@ Automatic audio cleaning is still in progress and is not yet wired into the subt
 
 The current implementation target for this branch is documented in [Audio Cleaning Behavior Contract](docs/audio-cleaning-behavior-contract.md). It defines the planned cleaning modes (`off`, `basic`, and `speechbrain`), the precedence between per-run choice and saved defaults, and the rule that unavailable cleaning backends must fail explicitly instead of silently falling back.
 
+## Supported Input Formats
+
+The project currently documents and guarantees support for these input file types:
+
+- Audio: `.mp3`, `.wav`
+- Video: `.mp4`, `.avi`
+
+The GUI file picker currently exposes exactly those four extensions.
+
+The backend is slightly more permissive than the GUI filter, but only on a best-effort basis:
+
+- Audio input in the CLI is decoded through Pydub (`AudioSegment.from_file`). Additional audio formats may work if the local decoder stack available to Pydub, typically FFmpeg or Libav, can open the file and its codec.
+- Video input is identified through `python-magic` using the file MIME type (`video/*`) and then processed through MoviePy for audio extraction. Additional video formats may work if their container and codec are supported by the local MoviePy and FFmpeg setup.
+
+Those additional formats are not currently part of the documented support contract, because behavior depends on which codecs and media backends are installed on the machine running the tool.
+
+All accepted input is normalized into an internal WAV working file before segmentation and transcription.
+
 ## Usage
 
 The application can be used in two ways: through the command line or via the graphical user interface (GUI).
@@ -51,10 +69,9 @@ The application can also be initiated with specific parameters detailed below:
 
 #### Mandatory Arguments:
 
-- `-i` or `--input`: The path to the input audio file in supported audio format or video format. This argument is required.
+- `-i` or `--input`: The path to the input audio file in a supported audio format or supported video format. This argument is required.
   - If audio is provided, then the final result will be more accurate if the input audio is clean and contains only voices. Automatic cleaning is being implemented in this branch; until it is available in the CLI and GUI, use software like **[UVR](https://github.com/Anjok07/ultimatevocalremovergui)** when you need to clean audio before running the tool.
-
-The current backend normalizes accepted input into an internal WAV working file before segmentation and transcription.
+  - Guaranteed supported input extensions are listed in the [Supported Input Formats](#supported-input-formats) section above.
 
 #### Optional Arguments:
 
