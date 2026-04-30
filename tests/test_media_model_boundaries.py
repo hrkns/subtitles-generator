@@ -1,5 +1,6 @@
 import json
 import os
+import types
 from pathlib import Path
 
 import pytest
@@ -207,6 +208,174 @@ def test_prepare_working_audio_extracts_video_to_wav(tmp_path, monkeypatch):
     assert calls == {
         "extract_audio": ("input.mp4", working_audio_path),
         "validate_audio_file": working_audio_path,
+    }
+
+
+def test_resolve_cleaning_mode_defaults_to_off():
+    assert process_input_module.resolve_cleaning_mode() == "off"
+
+
+def test_resolve_cleaning_mode_rejects_unknown_modes():
+    with pytest.raises(ValueError, match="Unsupported cleaning mode 'nope'"):
+        process_input_module.resolve_cleaning_mode("nope")
+
+
+def test_apply_audio_cleaning_off_returns_original_working_audio():
+    working_audio = object()
+
+    cleaned_audio_path, cleaned_audio = process_input_module.apply_audio_cleaning(
+        "working.wav",
+        None,
+        working_audio,
+    )
+
+    assert cleaned_audio_path == "working.wav"
+    assert cleaned_audio is working_audio
+
+
+def test_apply_audio_cleaning_basic_exports_cleaned_wav(tmp_path, monkeypatch):
+    monkeypatch.setattr(process_input_module, "TMP_DIR", f"{tmp_path}{os.sep}")
+
+    effect_calls = []
+    source_audio = object()
+    cleaned_audio_after_effects = FakeExportableAudio()
+    cleaned_audio = object()
+    expected_output_path = os.path.join(
+        process_input_module.TMP_DIR,
+        process_input_module.PREPROCESSED_AUDIO_FILENAME_TEMPLATE.format("basic"),
+    )
+
+    monkeypatch.setattr(
+        process_input_module.audio_effects,
+        "high_pass_filter",
+        lambda audio, cutoff: effect_calls.append(("high_pass_filter", audio, cutoff)) or cleaned_audio_after_effects,
+    )
+    monkeypatch.setattr(
+        process_input_module.audio_effects,
+        "low_pass_filter",
+        lambda audio, cutoff: effect_calls.append(("low_pass_filter", audio, cutoff)) or cleaned_audio_after_effects,
+    )
+    monkeypatch.setattr(
+        process_input_module.audio_effects,
+        "compress_dynamic_range",
+        lambda audio: effect_calls.append(("compress_dynamic_range", audio)) or cleaned_audio_after_effects,
+    )
+    monkeypatch.setattr(
+        process_input_module.audio_effects,
+        "normalize",
+        lambda audio: effect_calls.append(("normalize", audio)) or cleaned_audio_after_effects,
+    )
+
+    def fake_validate_audio_file(file_path):
+        if file_path == expected_output_path:
+            return cleaned_audio
+        raise AssertionError(f"Unexpected validation path: {file_path}")
+
+    monkeypatch.setattr(process_input_module, "validate_audio_file", fake_validate_audio_file)
+
+    cleaned_audio_path, validated_audio = process_input_module.apply_audio_cleaning(
+        "working.wav",
+        "basic",
+        source_audio,
+    )
+
+    assert cleaned_audio_path == expected_output_path
+    assert validated_audio is cleaned_audio
+    assert effect_calls == [
+        ("high_pass_filter", source_audio, 120),
+        ("low_pass_filter", cleaned_audio_after_effects, 7600),
+        ("compress_dynamic_range", cleaned_audio_after_effects),
+        ("normalize", cleaned_audio_after_effects),
+    ]
+    assert cleaned_audio_after_effects.export_calls == [
+        (expected_output_path, process_input_module.WORKING_AUDIO_FORMAT)
+    ]
+
+
+def test_load_speechbrain_enhancer_reports_missing_dependency(monkeypatch):
+    def fake_import_module(module_name):
+        raise ModuleNotFoundError(module_name)
+
+    monkeypatch.setattr(process_input_module.importlib, "import_module", fake_import_module)
+
+    with pytest.raises(RuntimeError, match="optional speechbrain enhancement dependencies"):
+        process_input_module.load_speechbrain_enhancer()
+
+
+def test_apply_audio_cleaning_speechbrain_enhances_working_audio(tmp_path, monkeypatch):
+    monkeypatch.setattr(process_input_module, "TMP_DIR", f"{tmp_path}{os.sep}")
+    monkeypatch.setattr(process_input_module, "AUDIO_CACHE_DIR", f"{tmp_path}{os.sep}cache{os.sep}")
+
+    calls = {}
+    cleaned_audio = object()
+    expected_output_path = os.path.join(
+        process_input_module.TMP_DIR,
+        process_input_module.PREPROCESSED_AUDIO_FILENAME_TEMPLATE.format("speechbrain"),
+    )
+    expected_savedir = os.path.join(
+        process_input_module.AUDIO_CACHE_DIR,
+        process_input_module.SPEECHBRAIN_MODEL_CACHE_DIRNAME,
+    )
+
+    class FakeEnhancer:
+        def enhance_file(self, input_path, output_path):
+            calls["enhance_file"] = (input_path, output_path)
+            Path(output_path).write_text("enhanced audio", encoding="utf-8")
+
+    class FakeSpectralMaskEnhancement:
+        @staticmethod
+        def from_hparams(source, savedir):
+            calls["from_hparams"] = (source, savedir)
+            return FakeEnhancer()
+
+    monkeypatch.setattr(
+        process_input_module.importlib,
+        "import_module",
+        lambda module_name: types.SimpleNamespace(SpectralMaskEnhancement=FakeSpectralMaskEnhancement),
+    )
+
+    def fake_validate_audio_file(file_path):
+        if file_path == expected_output_path:
+            return cleaned_audio
+        raise AssertionError(f"Unexpected validation path: {file_path}")
+
+    monkeypatch.setattr(process_input_module, "validate_audio_file", fake_validate_audio_file)
+
+    cleaned_audio_path, validated_audio = process_input_module.apply_audio_cleaning(
+        "working.wav",
+        "speechbrain",
+    )
+
+    assert cleaned_audio_path == expected_output_path
+    assert validated_audio is cleaned_audio
+    assert calls["from_hparams"] == (process_input_module.SPEECHBRAIN_MODEL_SOURCE, expected_savedir)
+    assert calls["enhance_file"] == ("working.wav", expected_output_path)
+    assert Path(expected_output_path).exists()
+
+
+def test_prepare_transcription_audio_applies_cleaning_after_working_audio_creation(monkeypatch):
+    calls = {}
+    working_audio = object()
+    cleaned_audio = object()
+
+    def fake_prepare_working_audio(input_path):
+        calls["prepare_working_audio"] = input_path
+        return "working.wav", working_audio
+
+    def fake_apply_audio_cleaning(working_audio_path, cleaning_mode=None, received_audio=None):
+        calls["apply_audio_cleaning"] = (working_audio_path, cleaning_mode, received_audio)
+        return "cleaned.wav", cleaned_audio
+
+    monkeypatch.setattr(process_input_module, "prepare_working_audio", fake_prepare_working_audio)
+    monkeypatch.setattr(process_input_module, "apply_audio_cleaning", fake_apply_audio_cleaning)
+
+    prepared_audio_path, prepared_audio = process_input_module.prepare_transcription_audio("input.wav", "basic")
+
+    assert prepared_audio_path == "cleaned.wav"
+    assert prepared_audio is cleaned_audio
+    assert calls == {
+        "prepare_working_audio": "input.wav",
+        "apply_audio_cleaning": ("working.wav", "basic", working_audio),
     }
 
 

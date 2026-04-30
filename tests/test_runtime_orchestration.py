@@ -30,6 +30,8 @@ def test_execution_args_parses_runtime_flags(monkeypatch):
             "output.srt",
             "--checkpoints",
             "5m",
+            "--cleaning-mode",
+            "basic",
             "--language",
             "es",
             "--merge",
@@ -41,6 +43,7 @@ def test_execution_args_parses_runtime_flags(monkeypatch):
     assert args.input == "input.mp3"
     assert args.output == "output.srt"
     assert args.checkpoints == "5m"
+    assert args.cleaning_mode == "basic"
     assert args.language == "es"
     assert args.merge is True
     assert args.version is False
@@ -52,7 +55,15 @@ def test_execution_args_parses_version_flag(monkeypatch):
     args = execution_args()
 
     assert args.version is True
+    assert args.cleaning_mode is None
     assert args.input is None
+
+
+def test_execution_args_rejects_invalid_cleaning_mode(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["main.py", "--input", "input.mp3", "--cleaning-mode", "invalid"])
+
+    with pytest.raises(SystemExit):
+        execution_args()
 
 
 def test_process_input_uses_checkpoint_flow_for_audio_input(tmp_path, monkeypatch):
@@ -83,21 +94,22 @@ def test_process_input_uses_checkpoint_flow_for_audio_input(tmp_path, monkeypatc
             output_json_template,
         )
 
-    monkeypatch.setattr(
-        process_input_module,
-        "prepare_working_audio",
-        lambda input_path: (os.path.join(process_input_module.TMP_DIR, process_input_module.WORKING_AUDIO_FILENAME), fake_audio),
-    )
+    def fake_prepare_transcription_audio(input_path, cleaning_mode):
+        calls["prepare_transcription_audio"] = (input_path, cleaning_mode)
+        return (os.path.join(process_input_module.TMP_DIR, process_input_module.WORKING_AUDIO_FILENAME), fake_audio)
+
+    monkeypatch.setattr(process_input_module, "prepare_transcription_audio", fake_prepare_transcription_audio)
     monkeypatch.setattr(process_input_module, "generate_segments_from_checkpoints", fake_generate_segments)
     monkeypatch.setattr(process_input_module, "parse_segments", fail_parse_segments)
     monkeypatch.setattr(process_input_module.whisper, "load_model", fake_load_model)
     monkeypatch.setattr(process_input_module, "process_audio_segments", fake_process_audio_segments)
 
-    args = SimpleNamespace(input="input.mp3", checkpoints="30s", segments=None, language=None)
+    args = SimpleNamespace(input="input.mp3", checkpoints="30s", segments=None, language=None, cleaning_mode="basic")
 
     process_input_module.process_input(args)
 
     assert tmp_dir.exists()
+    assert calls["prepare_transcription_audio"] == ("input.mp3", "basic")
     assert calls["generate_segments"] == ("30s", 65000)
     assert calls["load_model"] == "tiny"
     assert calls["process_audio_segments"] == (
@@ -131,11 +143,11 @@ def test_process_input_uses_video_extraction_and_default_full_range(tmp_path, mo
             output_json_template,
         )
 
-    def fake_prepare_working_audio(input_path):
-        calls["prepare_working_audio"] = input_path
+    def fake_prepare_transcription_audio(input_path, cleaning_mode):
+        calls["prepare_transcription_audio"] = (input_path, cleaning_mode)
         return (os.path.join(process_input_module.TMP_DIR, process_input_module.WORKING_AUDIO_FILENAME), fake_audio)
 
-    monkeypatch.setattr(process_input_module, "prepare_working_audio", fake_prepare_working_audio)
+    monkeypatch.setattr(process_input_module, "prepare_transcription_audio", fake_prepare_transcription_audio)
     monkeypatch.setattr(process_input_module, "generate_segments_from_checkpoints", fail_generate_segments)
     monkeypatch.setattr(process_input_module, "parse_segments", fail_parse_segments)
     monkeypatch.setattr(process_input_module.whisper, "load_model", lambda model_name: "fake-model")
@@ -145,7 +157,7 @@ def test_process_input_uses_video_extraction_and_default_full_range(tmp_path, mo
 
     process_input_module.process_input(args)
 
-    assert calls["prepare_working_audio"] == "input.mp4"
+    assert calls["prepare_transcription_audio"] == ("input.mp4", "off")
     assert calls["process_audio_segments"] == (
         fake_audio,
         [(0, 42000)],
@@ -160,11 +172,11 @@ def test_process_input_uses_explicit_segments(monkeypatch):
     fake_audio = FakeAudio(99000)
     expected_segments = [(1000, 5000)]
 
-    monkeypatch.setattr(
-        process_input_module,
-        "prepare_working_audio",
-        lambda input_path: (os.path.join(process_input_module.TMP_DIR, process_input_module.WORKING_AUDIO_FILENAME), fake_audio),
-    )
+    def fake_prepare_transcription_audio(input_path, cleaning_mode):
+        calls["prepare_transcription_audio"] = (input_path, cleaning_mode)
+        return (os.path.join(process_input_module.TMP_DIR, process_input_module.WORKING_AUDIO_FILENAME), fake_audio)
+
+    monkeypatch.setattr(process_input_module, "prepare_transcription_audio", fake_prepare_transcription_audio)
     monkeypatch.setattr(
         process_input_module,
         "generate_segments_from_checkpoints",
@@ -186,6 +198,7 @@ def test_process_input_uses_explicit_segments(monkeypatch):
 
     process_input_module.process_input(args)
 
+    assert calls["prepare_transcription_audio"] == ("input.mp3", "off")
     assert calls["parse_segments"] == ("00:01-00:05", 99000)
     assert calls["process_audio_segments"] == (expected_segments, "en")
 

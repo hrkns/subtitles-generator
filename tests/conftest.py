@@ -48,12 +48,13 @@ def _install_stub_modules():
 
     if "pydub" not in sys.modules:
         pydub_module = types.ModuleType("pydub")
+        pydub_effects_module = types.ModuleType("pydub.effects")
 
         class _AudioSegment:
             def __getitem__(self, _segment_slice):
                 return self
 
-            def export(self, _file_path, format="mp3"):
+            def export(self, _file_path, format="wav"):
                 return format
 
             @staticmethod
@@ -64,8 +65,15 @@ def _install_stub_modules():
             def from_mp3(_file_path):
                 return _AudioSegment()
 
+        pydub_effects_module.normalize = lambda audio: audio
+        pydub_effects_module.compress_dynamic_range = lambda audio: audio
+        pydub_effects_module.high_pass_filter = lambda audio, _cutoff: audio
+        pydub_effects_module.low_pass_filter = lambda audio, _cutoff: audio
+
         pydub_module.AudioSegment = _AudioSegment
+        pydub_module.effects = pydub_effects_module
         sys.modules["pydub"] = pydub_module
+        sys.modules["pydub.effects"] = pydub_effects_module
 
     if "pydub.exceptions" not in sys.modules:
         pydub_exceptions_module = types.ModuleType("pydub.exceptions")

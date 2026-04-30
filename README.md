@@ -5,6 +5,7 @@ Subtitles Generator is a versatile tool designed to generate subtitles (SRT file
 ## Features
 
 - Support for guaranteed input in MP3 and WAV audio files, plus MP4 and AVI video files.
+- Optional CLI audio preprocessing modes: `off`, `basic`, and `speechbrain`.
 - Customizable checkpoints for subtitle segments.
 - Ability to specify specific audio segments for processing.
 - Language specification for the audio content.
@@ -25,7 +26,15 @@ Subtitles Generator is a versatile tool designed to generate subtitles (SRT file
 
 ## Audio Cleaning Status
 
-Automatic audio cleaning is still in progress and is not yet wired into the subtitle generation flow.
+Automatic audio cleaning is now wired into the CLI preprocessing stage that runs between working-audio normalization and transcription.
+
+The current CLI-supported modes are:
+
+- `off`: use the normalized working WAV without additional cleaning
+- `basic`: apply a lightweight Pydub-based cleanup chain
+- `speechbrain`: apply SpeechBrain enhancement when its optional dependencies are available
+
+The GUI selector and saved default preference are still in progress.
 
 The current implementation target for this branch is documented in [Audio Cleaning Behavior Contract](docs/audio-cleaning-behavior-contract.md). It defines the planned cleaning modes (`off`, `basic`, and `speechbrain`), the precedence between per-run choice and saved defaults, and the rule that unavailable cleaning backends must fail explicitly instead of silently falling back.
 
@@ -61,6 +70,8 @@ python gui.py
 
 In the GUI, you can easily set the input file and the output path. Once all parameters are set, simply click the 'Generate' button to start the subtitle creation process. All the other arguments used in the CLI option will be translated into proper GUI controls in the future.
 
+The GUI does not yet expose the cleaning-mode selector. Use the CLI if you want to choose `basic` or `speechbrain` right now.
+
 ![Alt text](assets/img/gui.png)
 
 ### Using the Command Line
@@ -84,6 +95,11 @@ The application can also be initiated with specific parameters detailed below:
 - `-m` or `--merge`: Merge the output of the process into an existing SRT file either indicated with the output input flag or implicitly inferred from the input path.
 
 - `-l` or `--language`: The language of the audio content. This information will be used for speech recognition purposes. Supported languages and how the Whisper AI models perform for each one can be found [here](https://github.com/openai/whisper#available-models-and-languages). If no value provided, then the default one will be `en` (English).
+
+- `--cleaning-mode`: Optional preprocessing mode to apply once to the normalized working audio before segmentation and transcription. Supported values are `off`, `basic`, and `speechbrain`.
+  - `off` keeps the normalized working WAV unchanged.
+  - `basic` uses the built-in lightweight cleanup chain and does not require extra model downloads.
+  - `speechbrain` requires the optional SpeechBrain enhancement dependencies and a first-run model download.
 
 ### Examples:
 
@@ -127,6 +143,18 @@ python main.py -i /path/to/audio.mp3 -s 5m
 
 ```
 python main.py -i /path/to/audio.mp3 -l en
+```
+
+8. Using the lightweight cleaning pipeline:
+
+```
+python main.py -i /path/to/audio.mp3 --cleaning-mode basic
+```
+
+9. Using the SpeechBrain cleaning pipeline:
+
+```
+python main.py -i /path/to/audio.mp3 --cleaning-mode speechbrain
 ```
 
 ## Testing

@@ -1,4 +1,5 @@
 import datetime
+import importlib
 import json
 import logging
 import os
@@ -7,9 +8,9 @@ import sys
 import magic
 from moviepy import AudioFileClip
 import whisper_timestamped as whisper
-from pydub import AudioSegment
+from pydub import AudioSegment, effects as audio_effects
 from pydub.exceptions import CouldntDecodeError
-from config import TMP_DIR
+from config import AUDIO_CACHE_DIR, TMP_DIR
 from modules import convert_hhmmss_to_ms, format_ms_duration
 
 # Set up logging
@@ -17,6 +18,11 @@ logging.basicConfig(level=logging.INFO)
 
 WORKING_AUDIO_FORMAT = "wav"
 WORKING_AUDIO_FILENAME = f"working_input_audio.{WORKING_AUDIO_FORMAT}"
+SUPPORTED_CLEANING_MODES = ("off", "basic", "speechbrain")
+DEFAULT_CLEANING_MODE = "off"
+PREPROCESSED_AUDIO_FILENAME_TEMPLATE = f"working_input_audio_{{}}.{WORKING_AUDIO_FORMAT}"
+SPEECHBRAIN_MODEL_SOURCE = "speechbrain/metricgan-plus-voicebank"
+SPEECHBRAIN_MODEL_CACHE_DIRNAME = "speechbrain_metricgan_plus_voicebank"
 
 def validate_audio_file(file_path):
     if not os.path.exists(file_path):
@@ -90,6 +96,87 @@ def prepare_working_audio(input_path):
     input_audio = validate_audio_file(input_path)
     normalize_audio_file(input_audio, working_audio_path)
     return working_audio_path, validate_audio_file(working_audio_path)
+
+def resolve_cleaning_mode(cleaning_mode=None):
+    resolved_mode = cleaning_mode or DEFAULT_CLEANING_MODE
+
+    if resolved_mode not in SUPPORTED_CLEANING_MODES:
+        supported_modes = ", ".join(SUPPORTED_CLEANING_MODES)
+        raise ValueError(f"Unsupported cleaning mode '{resolved_mode}'. Supported values are: {supported_modes}.")
+
+    return resolved_mode
+
+def apply_basic_audio_cleaning(input_audio, output_path, output_format=WORKING_AUDIO_FORMAT):
+    logging.info("Applying basic audio cleaning...")
+    cleaned_audio = audio_effects.high_pass_filter(input_audio, 120)
+    cleaned_audio = audio_effects.low_pass_filter(cleaned_audio, 7600)
+    cleaned_audio = audio_effects.compress_dynamic_range(cleaned_audio)
+    cleaned_audio = audio_effects.normalize(cleaned_audio)
+    cleaned_audio.export(output_path, format=output_format)
+    logging.info(f"Basic cleaned audio saved to {output_path}")
+    return output_path
+
+def load_speechbrain_enhancer():
+    try:
+        enhancement_module = importlib.import_module("speechbrain.inference.enhancement")
+        spectral_mask_enhancement = enhancement_module.SpectralMaskEnhancement
+    except Exception as e:
+        raise RuntimeError(
+            "SpeechBrain cleaning mode requires the optional speechbrain enhancement dependencies to be installed."
+        ) from e
+
+    savedir = os.path.join(AUDIO_CACHE_DIR, SPEECHBRAIN_MODEL_CACHE_DIRNAME)
+    os.makedirs(savedir, exist_ok=True)
+
+    try:
+        return spectral_mask_enhancement.from_hparams(
+            source=SPEECHBRAIN_MODEL_SOURCE,
+            savedir=savedir,
+        )
+    except Exception as e:
+        raise RuntimeError(
+            "SpeechBrain cleaning mode could not load its enhancement model. Ensure the optional dependencies are installed and the model assets can be downloaded."
+        ) from e
+
+def apply_speechbrain_audio_cleaning(input_path, output_path):
+    logging.info("Applying SpeechBrain audio cleaning...")
+    enhancer = load_speechbrain_enhancer()
+
+    try:
+        enhancer.enhance_file(input_path, output_path)
+    except Exception as e:
+        raise RuntimeError("SpeechBrain cleaning mode failed while enhancing the working audio.") from e
+
+    if not os.path.exists(output_path):
+        raise RuntimeError("SpeechBrain cleaning mode did not produce an enhanced audio file.")
+
+    logging.info(f"SpeechBrain cleaned audio saved to {output_path}")
+    return output_path
+
+def apply_audio_cleaning(working_audio_path, cleaning_mode=None, working_audio=None):
+    resolved_mode = resolve_cleaning_mode(cleaning_mode)
+
+    if resolved_mode == DEFAULT_CLEANING_MODE:
+        logging.info("Audio cleaning mode set to off. Using normalized working audio.")
+        if working_audio is None:
+            working_audio = validate_audio_file(working_audio_path)
+        return working_audio_path, working_audio
+
+    cleaned_audio_path = os.path.join(TMP_DIR, PREPROCESSED_AUDIO_FILENAME_TEMPLATE.format(resolved_mode))
+
+    if resolved_mode == "basic":
+        source_audio = working_audio
+        if source_audio is None:
+            source_audio = validate_audio_file(working_audio_path)
+        apply_basic_audio_cleaning(source_audio, cleaned_audio_path)
+    elif resolved_mode == "speechbrain":
+        apply_speechbrain_audio_cleaning(working_audio_path, cleaned_audio_path)
+
+    return cleaned_audio_path, validate_audio_file(cleaned_audio_path)
+
+def prepare_transcription_audio(input_path, cleaning_mode=None):
+    working_audio_path, working_audio = prepare_working_audio(input_path)
+    return apply_audio_cleaning(working_audio_path, cleaning_mode, working_audio)
 
 def parse_segments(segments_str, total_duration_ms):
     segments = []
@@ -314,6 +401,7 @@ def generate_segments_from_checkpoints(checkpoints, total_duration_ms):
 def process_input(args):
     # extract command line args and set defaults
     checkpoints = args.checkpoints
+    cleaning_mode = resolve_cleaning_mode(getattr(args, "cleaning_mode", None))
     segments = args.segments
     input_path = args.input
     audio_language = args.language or 'en'
@@ -329,8 +417,9 @@ def process_input(args):
     if not os.path.exists(TMP_DIR):
         os.makedirs(TMP_DIR)
 
-    # Convert the input into a normalized working audio file used by transcription.
-    working_audio_path, input_audio = prepare_working_audio(input_path)
+    # Prepare the normalized and optionally cleaned working audio used by transcription.
+    transcription_audio_path, input_audio = prepare_transcription_audio(input_path, cleaning_mode)
+    logging.info(f"Prepared transcription audio at {transcription_audio_path} using cleaning mode '{cleaning_mode}'.")
 
     # Get the total duration of the audio in milliseconds
     total_duration_ms = len(input_audio)
