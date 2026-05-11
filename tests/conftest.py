@@ -2,6 +2,8 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MODULES_DIR = REPO_ROOT / "modules"
@@ -273,3 +275,86 @@ def _install_stub_modules():
 
 
 _install_stub_modules()
+
+
+@pytest.fixture(autouse=True)
+def isolate_persisted_cleaning_state(tmp_path, monkeypatch):
+    isolated_app_config_path = str(tmp_path / ".app-config.json")
+    isolated_legacy_cleaning_settings_path = str(tmp_path / ".cleaning-settings.json")
+
+    import config as config_module
+    import app_config as app_config_module
+    import cleaning_settings as cleaning_settings_module
+    import modules as modules_module
+
+    original_load_app_config = app_config_module.load_app_config
+    original_save_app_config = app_config_module.save_app_config
+    original_update_app_config = app_config_module.update_app_config
+    original_load_cleaning_settings = cleaning_settings_module.load_cleaning_settings
+    original_save_cleaning_settings = cleaning_settings_module.save_cleaning_settings
+
+    monkeypatch.setattr(config_module, "APP_CONFIG_FILE", isolated_app_config_path, raising=False)
+    monkeypatch.setattr(config_module, "CLEANING_SETTINGS_FILE", isolated_legacy_cleaning_settings_path, raising=False)
+    monkeypatch.setattr(app_config_module, "APP_CONFIG_FILE", isolated_app_config_path, raising=False)
+    monkeypatch.setattr(app_config_module, "CLEANING_SETTINGS_FILE", isolated_legacy_cleaning_settings_path, raising=False)
+    monkeypatch.setattr(cleaning_settings_module, "APP_CONFIG_FILE", isolated_app_config_path, raising=False)
+    monkeypatch.setattr(cleaning_settings_module, "CLEANING_SETTINGS_FILE", isolated_legacy_cleaning_settings_path, raising=False)
+
+    def isolated_load_app_config(
+        config_path=isolated_app_config_path,
+        legacy_cleaning_settings_path=isolated_legacy_cleaning_settings_path,
+    ):
+        return original_load_app_config(
+            config_path=config_path,
+            legacy_cleaning_settings_path=legacy_cleaning_settings_path,
+        )
+
+    def isolated_save_app_config(app_config, config_path=isolated_app_config_path):
+        return original_save_app_config(app_config, config_path=config_path)
+
+    def isolated_update_app_config(
+        config_updates,
+        config_path=isolated_app_config_path,
+        legacy_cleaning_settings_path=isolated_legacy_cleaning_settings_path,
+    ):
+        return original_update_app_config(
+            config_updates,
+            config_path=config_path,
+            legacy_cleaning_settings_path=legacy_cleaning_settings_path,
+        )
+
+    def isolated_load_cleaning_settings(settings_path=isolated_app_config_path):
+        return original_load_cleaning_settings(settings_path=settings_path)
+
+    def isolated_save_cleaning_settings(
+        default_cleaning_mode,
+        preselect_saved_cleaning_mode=True,
+        settings_path=isolated_app_config_path,
+        basic_strategy_settings=None,
+        speechbrain_strategy_settings=None,
+    ):
+        return original_save_cleaning_settings(
+            default_cleaning_mode,
+            preselect_saved_cleaning_mode=preselect_saved_cleaning_mode,
+            settings_path=settings_path,
+            basic_strategy_settings=basic_strategy_settings,
+            speechbrain_strategy_settings=speechbrain_strategy_settings,
+        )
+
+    monkeypatch.setattr(app_config_module, "load_app_config", isolated_load_app_config)
+    monkeypatch.setattr(app_config_module, "save_app_config", isolated_save_app_config)
+    monkeypatch.setattr(app_config_module, "update_app_config", isolated_update_app_config)
+    monkeypatch.setattr(cleaning_settings_module, "load_cleaning_settings", isolated_load_cleaning_settings)
+    monkeypatch.setattr(cleaning_settings_module, "save_cleaning_settings", isolated_save_cleaning_settings)
+    monkeypatch.setattr(modules_module, "load_cleaning_settings", isolated_load_cleaning_settings)
+    monkeypatch.setattr(modules_module, "save_cleaning_settings", isolated_save_cleaning_settings)
+
+    if "process_input" in sys.modules:
+        process_input_module = sys.modules["process_input"]
+        monkeypatch.setattr(process_input_module, "load_cleaning_settings", isolated_load_cleaning_settings, raising=False)
+        monkeypatch.setattr(process_input_module, "save_cleaning_settings", isolated_save_cleaning_settings, raising=False)
+
+    if "gui" in sys.modules:
+        gui_module = sys.modules["gui"]
+        monkeypatch.setattr(gui_module, "load_app_config", isolated_load_app_config, raising=False)
+        monkeypatch.setattr(gui_module, "update_app_config", isolated_update_app_config, raising=False)

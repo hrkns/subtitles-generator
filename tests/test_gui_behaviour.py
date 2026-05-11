@@ -3,6 +3,22 @@ import pytest
 import gui
 
 
+BASIC_CLEANING_STATUS = (
+    "Basic cleaning uses the lightweight built-in preprocessing chain.\n"
+    "Audio cleanup performance is still unstable and may vary depending on the platform where it is executed."
+)
+
+SPEECHBRAIN_UNAVAILABLE_STATUS = (
+    "SpeechBrain enhancement is unavailable. Install the optional SpeechBrain dependencies before using this mode.\n"
+    "Audio cleanup performance is still unstable and may vary depending on the platform where it is executed."
+)
+
+SPEECHBRAIN_AVAILABLE_STATUS = (
+    "SpeechBrain enhancement dependencies are available. Model readiness will be validated before launch, and the first run may download model assets.\n"
+    "Audio cleanup performance is still unstable and may vary depending on the platform where it is executed."
+)
+
+
 class DummyEvent:
     def __init__(self):
         self.ignored = False
@@ -199,7 +215,7 @@ def test_widget_preselects_saved_cleaning_mode_when_enabled(monkeypatch):
     assert widget.cleaningModeComboBox.currentText() == "basic"
     assert widget.autoApplyCleaningModeCheckBox.isChecked() is True
     assert widget.saveCleaningModeCheckBox.isChecked() is False
-    assert widget.cleaningModeStatusLabel.text == "Basic cleaning uses the lightweight built-in preprocessing chain."
+    assert widget.cleaningModeStatusLabel.text == BASIC_CLEANING_STATUS
 
 
 def test_widget_defaults_cleaning_mode_to_off_when_saved_value_is_not_preselected(monkeypatch):
@@ -246,9 +262,7 @@ def test_cleaning_mode_status_reports_unavailable_speechbrain(monkeypatch):
 
     widget.cleaningModeComboBox.setCurrentText("speechbrain")
 
-    assert widget.cleaningModeStatusLabel.text == (
-        "SpeechBrain enhancement is unavailable. Install the optional SpeechBrain dependencies before using this mode."
-    )
+    assert widget.cleaningModeStatusLabel.text == SPEECHBRAIN_UNAVAILABLE_STATUS
 
 
 def test_cleaning_mode_status_reports_runtime_validation_for_available_speechbrain(monkeypatch):
@@ -256,9 +270,7 @@ def test_cleaning_mode_status_reports_runtime_validation_for_available_speechbra
     widget.speechbrainDependencyAvailable = True
     widget.cleaningModeComboBox.setCurrentText("speechbrain")
 
-    assert widget.cleaningModeStatusLabel.text == (
-        "SpeechBrain enhancement dependencies are available. Model readiness will be validated before launch, and the first run may download model assets."
-    )
+    assert widget.cleaningModeStatusLabel.text == SPEECHBRAIN_AVAILABLE_STATUS
 
 
 def test_run_script_requires_input_and_output(monkeypatch):

@@ -11,6 +11,9 @@ from modules import load_app_config, update_app_config
 
 SUPPORTED_CLEANING_MODES = ("off", "basic", "speechbrain")
 DEFAULT_CLEANING_MODE = "off"
+CLEANING_PERFORMANCE_WARNING = (
+    "Audio cleanup performance is still unstable and may vary depending on the platform where it is executed."
+)
 
 
 def is_speechbrain_dependency_available():
@@ -95,14 +98,16 @@ class SubtitlesGeneratorGUI(QWidget):
         self.cleaningModeComboBox.currentTextChanged.connect(self.update_cleaning_mode_status)
         layout.addWidget(self.cleaningModeComboBox)
 
+        self.cleaningModeStatusLabel = QLabel("")
+        if hasattr(self.cleaningModeStatusLabel, "setWordWrap"):
+            self.cleaningModeStatusLabel.setWordWrap(True)
+        layout.addWidget(self.cleaningModeStatusLabel)
+
         self.autoApplyCleaningModeCheckBox = QCheckBox("Auto-apply preferred cleaning mode on startup")
         layout.addWidget(self.autoApplyCleaningModeCheckBox)
 
         self.saveCleaningModeCheckBox = QCheckBox("Save selected cleaning mode as default for future runs")
         layout.addWidget(self.saveCleaningModeCheckBox)
-
-        self.cleaningModeStatusLabel = QLabel("")
-        layout.addWidget(self.cleaningModeStatusLabel)
 
         self.logTextEdit = QTextEdit()
         layout.addWidget(self.logTextEdit)
@@ -155,15 +160,18 @@ class SubtitlesGeneratorGUI(QWidget):
         if selected_mode == "speechbrain":
             if self.speechbrainDependencyAvailable:
                 self.cleaningModeStatusLabel.setText(
-                    "SpeechBrain enhancement dependencies are available. Model readiness will be validated before launch, and the first run may download model assets."
+                    "SpeechBrain enhancement dependencies are available. Model readiness will be validated before launch, and the first run may download model assets.\n"
+                    + CLEANING_PERFORMANCE_WARNING
                 )
             else:
                 self.cleaningModeStatusLabel.setText(
-                    "SpeechBrain enhancement is unavailable. Install the optional SpeechBrain dependencies before using this mode."
+                    "SpeechBrain enhancement is unavailable. Install the optional SpeechBrain dependencies before using this mode.\n"
+                    + CLEANING_PERFORMANCE_WARNING
                 )
         elif selected_mode == "basic":
             self.cleaningModeStatusLabel.setText(
-                "Basic cleaning uses the lightweight built-in preprocessing chain."
+                "Basic cleaning uses the lightweight built-in preprocessing chain.\n"
+                + CLEANING_PERFORMANCE_WARNING
             )
         else:
             self.cleaningModeStatusLabel.setText(

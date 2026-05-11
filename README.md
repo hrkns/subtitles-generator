@@ -209,16 +209,16 @@ The same test suite is also configured to run in GitHub Actions on push and pull
 
 Install the development dependencies if you have not already done so: `install_dev_dependencies.cmd` or `install_dev_dependencies.sh`.
 
-Run the current automated tests and coverage report with:
+Run the current automated tests with:
 
 ```
 python -m pytest
 ```
 
-If you want an HTML coverage report as well, run:
+If you want terminal coverage plus an HTML coverage report as well, run:
 
 ```
-python -m pytest --cov-report=html
+python -m pytest --cov=. --cov-report=term-missing:skip-covered --cov-report=html
 ```
 
 To make this workflow an actual branch gate, configure the GitHub repository branch protection rules to require the `Pytest` check before merge.
