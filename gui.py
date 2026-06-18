@@ -33,6 +33,20 @@ def validate_speechbrain_runtime_ready():
             f"SpeechBrain enhancement is unavailable: {str(e)}"
         ) from e
 
+
+class SpeechBrainRuntimeValidationWorker(QObject):
+    finished = pyqtSignal(bool, str)
+
+    def run(self):
+        try:
+            validate_speechbrain_runtime_ready()
+        except Exception as e:
+            self.finished.emit(False, str(e))
+            return
+
+        self.finished.emit(True, "")
+
+
 class Worker(QObject):
     output = pyqtSignal(str)
     finished = pyqtSignal()
@@ -130,6 +144,8 @@ class SubtitlesGeneratorGUI(QWidget):
         self.lastInputPath = self.appConfig.get("last_input_path", "")
         self.lastOutputPath = self.appConfig.get("last_output_path", "")
         self.speechbrainDependencyAvailable = is_speechbrain_dependency_available()
+        self.speechbrainValidationWorker = None
+        self.speechbrainValidationThread = None
         self.autoApplyCleaningModeCheckBox.setChecked(self.appConfig.get("auto_apply_cleaning_mode", False))
         self.cleaningModeComboBox.setCurrentText(self.resolve_initial_cleaning_mode())
         self.saveCleaningModeCheckBox.setChecked(False)
@@ -225,17 +241,57 @@ class SubtitlesGeneratorGUI(QWidget):
             )
             return False
 
-        self.logTextEdit.append("Validating SpeechBrain enhancement availability...")
+        return True
 
-        try:
-            should_validate_runtime = self.appConfig.get("speechbrain_strategy_settings", {}).get("validate_runtime_before_launch", True)
-            if should_validate_runtime:
-                validate_speechbrain_runtime_ready()
-        except RuntimeError as e:
-            self.logTextEdit.append(str(e))
+    def should_validate_speechbrain_runtime_before_launch(self):
+        if self.cleaningModeComboBox.currentText() != "speechbrain":
             return False
 
-        return True
+        return self.appConfig.get("speechbrain_strategy_settings", {}).get("validate_runtime_before_launch", True)
+
+    def set_execution_controls_disabled(self, disabled):
+        for control in (
+            self.btnRunScript,
+            self.btnSelectFile,
+            self.btnSelectOutput,
+            self.cleaningModeComboBox,
+            self.autoApplyCleaningModeCheckBox,
+            self.saveCleaningModeCheckBox,
+        ):
+            if hasattr(control, "setDisabled"):
+                control.setDisabled(disabled)
+
+    def start_speechbrain_runtime_validation(self):
+        self.logTextEdit.append("Validating SpeechBrain enhancement availability...")
+        self.cleaningModeStatusLabel.setText(
+            "Validating SpeechBrain enhancement runtime readiness. The first run may download model assets.\n"
+            + CLEANING_PERFORMANCE_WARNING
+        )
+        self.set_execution_controls_disabled(True)
+        self.btnCancelScript.hide()
+
+        self.speechbrainValidationWorker = SpeechBrainRuntimeValidationWorker()
+        self.speechbrainValidationWorker.finished.connect(self.speechbrain_runtime_validation_finished)
+        self.speechbrainValidationThread = threading.Thread(target=self.speechbrainValidationWorker.run)
+        self.speechbrainValidationThread.start()
+
+    def speechbrain_runtime_validation_finished(self, is_ready, message):
+        self.speechbrainValidationWorker = None
+        self.speechbrainValidationThread = None
+
+        if not is_ready:
+            self.logTextEdit.append(message)
+            self.cleaningModeStatusLabel.setText(f"{message}\n" + CLEANING_PERFORMANCE_WARNING)
+            self.set_execution_controls_disabled(False)
+            self.btnCancelScript.hide()
+            return
+
+        self.logTextEdit.append("SpeechBrain enhancement is ready.")
+        self.cleaningModeStatusLabel.setText(
+            "SpeechBrain enhancement runtime is ready.\n"
+            + CLEANING_PERFORMANCE_WARNING
+        )
+        self.start_script_execution()
 
     def select_file(self):
         # File selection dialog
@@ -275,6 +331,26 @@ class SubtitlesGeneratorGUI(QWidget):
         self.persist_runtime_preferences()
         super().closeEvent(event)
 
+    def start_script_execution(self):
+        self.persist_runtime_preferences()
+
+        if self.saveCleaningModeCheckBox.isChecked():
+            self.persist_preferred_cleaning_mode()
+
+        self.logTextEdit.append("Running script...")
+
+        # Disable the run button and show the cancel button
+        self.set_execution_controls_disabled(True)
+        self.btnCancelScript.show()
+
+        # Prepare and start the script execution thread
+        command = self.build_command()
+        self.worker = Worker(command)
+        self.worker.output.connect(self.logTextEdit.append)
+        self.worker.finished.connect(self.script_finished)
+        self.thread = threading.Thread(target=self.worker.run)
+        self.thread.start()
+
     def run_script(self):
         # Check for file selection
         if not self.selectedFile or not self.outputPath:
@@ -287,26 +363,11 @@ class SubtitlesGeneratorGUI(QWidget):
         if not self.validate_selected_cleaning_mode():
             return
 
-        self.persist_runtime_preferences()
+        if self.should_validate_speechbrain_runtime_before_launch():
+            self.start_speechbrain_runtime_validation()
+            return
 
-        if self.saveCleaningModeCheckBox.isChecked():
-            self.persist_preferred_cleaning_mode()
-
-        self.logTextEdit.append("Running script...")
-
-        # Disable the run button and show the cancel button
-        self.btnRunScript.setDisabled(True)
-        self.btnSelectFile.setDisabled(True)
-        self.btnSelectOutput.setDisabled(True)
-        self.btnCancelScript.show()
-
-        # Prepare and start the script execution thread
-        command = self.build_command()
-        self.worker = Worker(command)
-        self.worker.output.connect(self.logTextEdit.append)
-        self.worker.finished.connect(self.script_finished)
-        self.thread = threading.Thread(target=self.worker.run)
-        self.thread.start()
+        self.start_script_execution()
 
     def cancel_script(self):
         # Stop the script execution
@@ -315,9 +376,7 @@ class SubtitlesGeneratorGUI(QWidget):
 
     def script_finished(self):
         # Re-enable the run button and hide the cancel button
-        self.btnRunScript.setDisabled(False)
-        self.btnSelectFile.setDisabled(False)
-        self.btnSelectOutput.setDisabled(False)
+        self.set_execution_controls_disabled(False)
         self.btnCancelScript.hide()
 
 if __name__ == '__main__':

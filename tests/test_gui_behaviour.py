@@ -354,17 +354,31 @@ def test_run_script_blocks_unavailable_speechbrain_before_execution(monkeypatch)
 def test_run_script_blocks_speechbrain_when_runtime_validation_fails(monkeypatch):
     widget, _updates = create_widget(monkeypatch)
     widget.speechbrainDependencyAvailable = True
+    created = {}
+
+    def fake_thread_factory(target):
+        thread = FakeThread(target)
+        created["validation_thread"] = thread
+        return thread
+
     monkeypatch.setattr(
         gui,
         "validate_speechbrain_runtime_ready",
         lambda: (_ for _ in ()).throw(RuntimeError("SpeechBrain enhancement is unavailable: model download failed")),
     )
+    monkeypatch.setattr(gui.threading, "Thread", fake_thread_factory)
 
     widget.selectedFile = "/tmp/input.mp3"
     widget.outputPath = "/tmp/output.srt"
     widget.cleaningModeComboBox.setCurrentText("speechbrain")
 
     widget.run_script()
+
+    assert widget.logTextEdit.lines == ["Validating SpeechBrain enhancement availability..."]
+    assert created["validation_thread"].started is True
+    assert widget.btnRunScript.disabled is True
+
+    created["validation_thread"].target()
 
     assert widget.logTextEdit.lines == [
         "Validating SpeechBrain enhancement availability...",
@@ -378,7 +392,7 @@ def test_run_script_validates_speechbrain_then_starts_worker(monkeypatch):
     widget, _updates = create_widget(monkeypatch)
     widget.speechbrainDependencyAvailable = True
 
-    created = {}
+    created = {"threads": [], "validation_calls": 0}
 
     def fake_worker_factory(command):
         worker = FakeWorkerForGui(command)
@@ -387,10 +401,13 @@ def test_run_script_validates_speechbrain_then_starts_worker(monkeypatch):
 
     def fake_thread_factory(target):
         thread = FakeThread(target)
-        created["thread"] = thread
+        created["threads"].append(thread)
         return thread
 
-    monkeypatch.setattr(gui, "validate_speechbrain_runtime_ready", lambda: None)
+    def fake_validate_speechbrain_runtime_ready():
+        created["validation_calls"] += 1
+
+    monkeypatch.setattr(gui, "validate_speechbrain_runtime_ready", fake_validate_speechbrain_runtime_ready)
     monkeypatch.setattr(gui, "Worker", fake_worker_factory)
     monkeypatch.setattr(gui.threading, "Thread", fake_thread_factory)
 
@@ -400,8 +417,16 @@ def test_run_script_validates_speechbrain_then_starts_worker(monkeypatch):
 
     widget.run_script()
 
+    assert widget.logTextEdit.lines == ["Validating SpeechBrain enhancement availability..."]
+    assert created["validation_calls"] == 0
+    assert created["threads"][0].started is True
+    assert "worker" not in created
+
+    created["threads"][0].target()
+
     assert widget.logTextEdit.lines == [
         "Validating SpeechBrain enhancement availability...",
+        "SpeechBrain enhancement is ready.",
         "Running script...",
     ]
     assert created["worker"].command == [
@@ -416,7 +441,8 @@ def test_run_script_validates_speechbrain_then_starts_worker(monkeypatch):
         "--cleaning-mode",
         "speechbrain",
     ]
-    assert created["thread"].started is True
+    assert created["validation_calls"] == 1
+    assert created["threads"][1].started is True
 
 
 def test_cancel_script_stops_worker_and_restores_controls(monkeypatch):
