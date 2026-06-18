@@ -35,11 +35,17 @@ def validate_audio_file(file_path):
     try:
         audio = AudioSegment.from_file(file_path)
         return audio
-    except CouldntDecodeError:
-        logging.error("Could not decode audio file. Please ensure it's a valid audio file.")
+    except CouldntDecodeError as e:
+        logging.error(
+            f"Could not decode audio file '{file_path}'. Please ensure it's a valid audio file. Error: {e}",
+            exc_info=True,
+        )
         sys.exit(1)
-    except Exception:
-        logging.error("Could not decode audio file. Please ensure it's a valid audio file.")
+    except Exception as e:
+        logging.error(
+            f"Could not decode audio file '{file_path}'. Please ensure it's a valid audio file. Error: {e}",
+            exc_info=True,
+        )
         sys.exit(1)
 
 def is_video_file(file_path):

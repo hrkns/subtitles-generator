@@ -70,6 +70,7 @@ def test_validate_audio_file_rejects_undecodable_files(monkeypatch, caplog):
 
     assert exc_info.value.code == 1
     assert "Could not decode audio file" in caplog.text
+    assert "not audio" in caplog.text
 
 
 def test_validate_audio_file_rejects_decode_failures(monkeypatch, caplog):
@@ -85,6 +86,7 @@ def test_validate_audio_file_rejects_decode_failures(monkeypatch, caplog):
 
     assert exc_info.value.code == 1
     assert "Could not decode audio file" in caplog.text
+    assert "decode failed" in caplog.text
 
 
 def test_is_video_file_returns_false_when_file_is_missing(monkeypatch, capsys):
