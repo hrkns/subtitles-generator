@@ -109,7 +109,7 @@ Contributions, issues, and feature requests are welcome!
 
 ## License
 
-[AGPL](https://www.gnu.org/licenses/agpl-3.0.en.html)
+[MIT](LICENSE)
 
 ## TODO
 
