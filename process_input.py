@@ -160,10 +160,15 @@ def load_speechbrain_enhancer():
     try:
         enhancement_module = importlib.import_module("speechbrain.inference.enhancement")
         spectral_mask_enhancement = enhancement_module.SpectralMaskEnhancement
-    except Exception as e:
+    except ModuleNotFoundError as e:
         raise RuntimeError(
             "SpeechBrain cleaning mode requires the optional speechbrain enhancement dependencies to be installed. "
             + SPEECHBRAIN_INSTALL_HINT
+        ) from e
+    except Exception as e:
+        raise RuntimeError(
+            "SpeechBrain cleaning mode failed while importing speechbrain.inference.enhancement. "
+            f"Original error: {e}"
         ) from e
 
     savedir = os.path.join(AUDIO_CACHE_DIR, SPEECHBRAIN_MODEL_CACHE_DIRNAME)

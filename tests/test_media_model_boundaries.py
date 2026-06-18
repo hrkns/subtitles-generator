@@ -373,6 +373,18 @@ def test_load_speechbrain_enhancer_reports_missing_dependency(monkeypatch):
         process_input_module.load_speechbrain_enhancer()
 
 
+def test_load_speechbrain_enhancer_reports_import_runtime_errors(monkeypatch):
+    def fake_import_module(module_name):
+        raise RuntimeError("torchaudio C++ extension mismatch")
+
+    monkeypatch.setattr(process_input_module.importlib, "import_module", fake_import_module)
+
+    with pytest.raises(RuntimeError, match="torchaudio C\\+\\+ extension mismatch") as exc_info:
+        process_input_module.load_speechbrain_enhancer()
+
+    assert "install_speechbrain_dependencies" not in str(exc_info.value)
+
+
 def test_load_speechbrain_enhancer_reports_model_load_failure_with_cache_path(tmp_path, monkeypatch):
     monkeypatch.setattr(process_input_module, "AUDIO_CACHE_DIR", f"{tmp_path}{os.sep}cache{os.sep}")
 
