@@ -34,6 +34,20 @@ def test_base_install_scripts_point_to_optional_speechbrain_install():
     assert "off/basic cleaning modes" in install_dependencies_cmd
 
 
+def test_dev_install_scripts_use_active_python_environment():
+    install_dev_dependencies_sh = read_project_file("install_dev_dependencies.sh")
+    install_dev_dependencies_cmd = read_project_file("install_dev_dependencies.cmd")
+
+    assert install_dev_dependencies_sh.startswith("#!/usr/bin/env sh\nset -eu\n")
+    assert "python -m pip install -r requirements-dev.txt" in install_dev_dependencies_sh
+    assert "\npip install" not in install_dev_dependencies_sh
+
+    assert install_dev_dependencies_cmd.startswith("@echo off\nsetlocal\n")
+    assert "python -m pip install -r requirements-dev.txt" in install_dev_dependencies_cmd
+    assert "if errorlevel 1 exit /b %errorlevel%" in install_dev_dependencies_cmd
+    assert "\npip install" not in install_dev_dependencies_cmd
+
+
 def test_optional_install_scripts_install_only_speechbrain_stack():
     install_speechbrain_dependencies_sh = read_project_file("install_speechbrain_dependencies.sh")
     install_speechbrain_dependencies_cmd = read_project_file("install_speechbrain_dependencies.cmd")
