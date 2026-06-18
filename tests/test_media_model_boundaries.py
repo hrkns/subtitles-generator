@@ -267,16 +267,28 @@ def test_resolve_cleaning_mode_rejects_unknown_modes():
         process_input_module.resolve_cleaning_mode("nope")
 
 
-def test_persist_default_cleaning_mode_saves_requested_mode(monkeypatch):
+@pytest.mark.parametrize("preselect_saved_cleaning_mode", [False, True])
+def test_persist_default_cleaning_mode_saves_requested_mode_without_changing_preselect_setting(
+    monkeypatch,
+    preselect_saved_cleaning_mode,
+):
     calls = {}
 
     def fake_save_cleaning_settings(default_cleaning_mode, preselect_saved_cleaning_mode=True):
         calls["save_cleaning_settings"] = (default_cleaning_mode, preselect_saved_cleaning_mode)
 
+    monkeypatch.setattr(
+        process_input_module,
+        "load_cleaning_settings",
+        lambda: {
+            "default_cleaning_mode": "off",
+            "preselect_saved_cleaning_mode": preselect_saved_cleaning_mode,
+        },
+    )
     monkeypatch.setattr(process_input_module, "save_cleaning_settings", fake_save_cleaning_settings)
 
     assert process_input_module.persist_default_cleaning_mode("basic") == "basic"
-    assert calls["save_cleaning_settings"] == ("basic", True)
+    assert calls["save_cleaning_settings"] == ("basic", preselect_saved_cleaning_mode)
 
 
 def test_apply_audio_cleaning_off_returns_original_working_audio():

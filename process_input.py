@@ -137,7 +137,12 @@ def resolve_cleaning_mode(cleaning_mode=None):
 
 def persist_default_cleaning_mode(cleaning_mode, already_resolved=False):
     resolved_mode = cleaning_mode if already_resolved else resolve_cleaning_mode(cleaning_mode)
-    save_cleaning_settings(resolved_mode, preselect_saved_cleaning_mode=True)
+    current_settings = load_cleaning_settings()
+    preselect_saved_cleaning_mode = current_settings.get("preselect_saved_cleaning_mode", False)
+    save_cleaning_settings(
+        resolved_mode,
+        preselect_saved_cleaning_mode=preselect_saved_cleaning_mode,
+    )
     logging.info(f"Saved default cleaning mode '{resolved_mode}'.")
     return resolved_mode
 

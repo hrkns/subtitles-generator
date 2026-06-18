@@ -261,6 +261,14 @@ def test_process_input_resolves_cleaning_mode_once_and_reuses_it_for_persistence
         )
 
     monkeypatch.setattr(process_input_module, "resolve_cleaning_mode", fake_resolve_cleaning_mode)
+    monkeypatch.setattr(
+        process_input_module,
+        "load_cleaning_settings",
+        lambda: {
+            "default_cleaning_mode": "off",
+            "preselect_saved_cleaning_mode": False,
+        },
+    )
     monkeypatch.setattr(process_input_module, "save_cleaning_settings", fake_save_cleaning_settings)
     monkeypatch.setattr(process_input_module, "prepare_transcription_audio", fake_prepare_transcription_audio)
     monkeypatch.setattr(process_input_module.whisper, "load_model", lambda model_name: "fake-model")
@@ -278,7 +286,7 @@ def test_process_input_resolves_cleaning_mode_once_and_reuses_it_for_persistence
     process_input_module.process_input(args)
 
     assert calls["resolve_cleaning_mode"] == 1
-    assert calls["save_cleaning_settings"] == ("basic", True)
+    assert calls["save_cleaning_settings"] == ("basic", False)
     assert calls["prepare_transcription_audio"] == ("input.mp3", "basic")
     assert calls["process_audio_segments"] == (
         fake_audio,
