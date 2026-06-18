@@ -1,1 +1,1 @@
-Set default output path and allow the user not to define an output filename, asigning then one by default.
+Set default output path and allow the user not to define an output filename, assigning then one by default.
