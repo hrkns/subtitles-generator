@@ -30,51 +30,6 @@ Subtitles Generator is a versatile tool designed to generate subtitles (SRT file
 
 - For local development and test execution, install the additional dependencies by running `install_dev_dependencies.cmd` or `install_dev_dependencies.sh`.
 
-## Audio Cleaning Status
-
-Automatic audio cleaning is now wired into the CLI preprocessing stage that runs between working-audio normalization and transcription.
-
-The current CLI-supported modes are:
-
-- `off`: use the normalized working WAV without additional cleaning
-- `basic`: apply a lightweight Pydub-based cleanup chain
-- `speechbrain`: apply SpeechBrain enhancement when its optional dependencies are available
-  - This is the heavier optional backend and it requires the optional SpeechBrain install step.
-  - If its dependency stack or model assets are unavailable, the application fails explicitly for that run and does not silently fall back.
-
-The CLI can also persist a chosen cleaning mode as the new default for future runs.
-If `--cleaning-mode` is omitted, the CLI resolves the effective mode in this order:
-
-- explicit per-run `--cleaning-mode`
-- saved default cleaning mode from `./.app-config.json`
-- built-in default `off`
-
-An explicit cleaning mode always wins for the current run, even when a saved preference already exists. The saved preference is only reused when no per-run mode is provided.
-
-The GUI now exposes the same cleaning-mode selection and save-default control as the CLI.
-When `speechbrain` is selected, the GUI validates both dependency availability and model readiness before execution starts, so first-run model download failures are surfaced before the subprocess begins.
-GUI-specific state is now stored in a dedicated local app config file at `./.app-config.json`, which keeps the last used paths, preferred cleaning mode, auto-apply preference, and strategy-specific settings together in one place.
-
-The current implementation target for this branch is documented in [Audio Cleaning Behavior Contract](docs/audio-cleaning-behavior-contract.md). It defines the planned cleaning modes (`off`, `basic`, and `speechbrain`), the precedence between per-run choice and saved defaults, and the rule that unavailable cleaning backends must fail explicitly instead of silently falling back.
-
-## Supported Input Formats
-
-The project currently documents and guarantees support for these input file types:
-
-- Audio: `.mp3`, `.wav`
-- Video: `.mp4`, `.avi`
-
-The GUI file picker currently exposes exactly those four extensions.
-
-The backend is slightly more permissive than the GUI filter, but only on a best-effort basis:
-
-- Audio input in the CLI is decoded through Pydub (`AudioSegment.from_file`). Additional audio formats may work if the local decoder stack available to Pydub, typically FFmpeg or Libav, can open the file and its codec.
-- Video input is identified through `python-magic` using the file MIME type (`video/*`) and then processed through MoviePy for audio extraction. Additional video formats may work if their container and codec are supported by the local MoviePy and FFmpeg setup.
-
-Those additional formats are not currently part of the documented support contract, because behavior depends on which codecs and media backends are installed on the machine running the tool.
-
-All accepted input is normalized into an internal WAV working file before segmentation and transcription.
-
 ## Usage
 
 The application can be used in two ways: through the command line or via the graphical user interface (GUI).
@@ -224,6 +179,52 @@ python -m pytest --cov=. --cov-report=term-missing:skip-covered --cov-report=htm
 To make this workflow an actual branch gate, configure the GitHub repository branch protection rules to require the `Pytest` check before merge.
 
 The current suite focuses on deterministic helper logic and output-path/time handling without requiring Whisper, MoviePy, `python-magic`, or real media assets.
+
+## Supported Input Formats
+
+The project currently documents and guarantees support for these input file types:
+
+- Audio: `.mp3`, `.wav`
+- Video: `.mp4`, `.avi`
+
+The GUI file picker currently exposes exactly those four extensions.
+
+The backend is slightly more permissive than the GUI filter, but only on a best-effort basis:
+
+- Audio input in the CLI is decoded through Pydub (`AudioSegment.from_file`). Additional audio formats may work if the local decoder stack available to Pydub, typically FFmpeg or Libav, can open the file and its codec.
+- Video input is identified through `python-magic` using the file MIME type (`video/*`) and then processed through MoviePy for audio extraction. Additional video formats may work if their container and codec are supported by the local MoviePy and FFmpeg setup.
+
+Those additional formats are not currently part of the documented support contract, because behavior depends on which codecs and media backends are installed on the machine running the tool.
+
+All accepted input is normalized into an internal WAV working file before segmentation and transcription.
+
+## Audio Cleaning Status
+
+Automatic audio cleaning is now wired into the CLI preprocessing stage that runs between working-audio normalization and transcription.
+
+The current CLI-supported modes are:
+
+- `off`: use the normalized working WAV without additional cleaning
+- `basic`: apply a lightweight Pydub-based cleanup chain
+- `speechbrain`: apply SpeechBrain enhancement when its optional dependencies are available
+  - This is the heavier optional backend and it requires the optional SpeechBrain install step.
+  - If its dependency stack or model assets are unavailable, the application fails explicitly for that run and does not silently fall back.
+
+The CLI can also persist a chosen cleaning mode as the new default for future runs.
+If `--cleaning-mode` is omitted, the CLI resolves the effective mode in this order:
+
+- explicit per-run `--cleaning-mode`
+- saved default cleaning mode from `./.app-config.json`
+- built-in default `off`
+
+An explicit cleaning mode always wins for the current run, even when a saved preference already exists. The saved preference is only reused when no per-run mode is provided.
+
+The GUI now exposes the same cleaning-mode selection and save-default control as the CLI.
+When `speechbrain` is selected, the GUI validates both dependency availability and model readiness before execution starts, so first-run model download failures are surfaced before the subprocess begins.
+GUI-specific state is now stored in a dedicated local app config file at `./.app-config.json`, which keeps the last used paths, preferred cleaning mode, auto-apply preference, and strategy-specific settings together in one place.
+
+The current implementation target for this branch is documented in [Audio Cleaning Behavior Contract](docs/audio-cleaning-behavior-contract.md). It defines the planned cleaning modes (`off`, `basic`, and `speechbrain`), the precedence between per-run choice and saved defaults, and the rule that unavailable cleaning backends must fail explicitly instead of silently falling back.
+
 
 ## Contributing
 
