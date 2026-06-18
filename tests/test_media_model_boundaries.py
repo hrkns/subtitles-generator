@@ -124,7 +124,7 @@ def test_is_video_file_detects_non_video_mime(monkeypatch):
     assert process_input_module.is_video_file("audio.mp3") is False
 
 
-def test_extract_audio_writes_audio_file(monkeypatch, capsys):
+def test_extract_audio_writes_audio_file(monkeypatch, caplog):
     calls = {}
 
     class FakeAudioFileClip:
@@ -139,22 +139,24 @@ def test_extract_audio_writes_audio_file(monkeypatch, capsys):
 
     monkeypatch.setattr(process_input_module, "AudioFileClip", FakeAudioFileClip)
 
-    process_input_module.extract_audio("video.mp4", "audio.wav")
+    with caplog.at_level(logging.INFO):
+        process_input_module.extract_audio("video.mp4", "audio.wav")
 
     assert calls == {"video_path": "video.mp4", "audio_path": "audio.wav", "closed": True}
-    assert "Audio extracted and saved to audio.wav" in capsys.readouterr().out
+    assert "Audio extracted and saved to audio.wav" in caplog.text
 
 
-def test_extract_audio_reports_errors(monkeypatch, capsys):
+def test_extract_audio_logs_and_reraises_errors(monkeypatch, caplog):
     class FakeAudioFileClip:
         def __init__(self, video_path):
             raise RuntimeError("boom")
 
     monkeypatch.setattr(process_input_module, "AudioFileClip", FakeAudioFileClip)
 
-    process_input_module.extract_audio("video.mp4", "audio.wav")
+    with caplog.at_level(logging.ERROR), pytest.raises(RuntimeError, match="boom"):
+        process_input_module.extract_audio("video.mp4", "audio.wav")
 
-    assert "An error occurred: boom" in capsys.readouterr().out
+    assert "Could not extract audio from 'video.mp4' to 'audio.wav': boom" in caplog.text
 
 
 def test_prepare_working_audio_normalizes_audio_input_to_wav(tmp_path, monkeypatch):

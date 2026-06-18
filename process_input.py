@@ -76,9 +76,10 @@ def extract_audio(video_path, audio_path):
     try:
         video = AudioFileClip(video_path)
         video.write_audiofile(audio_path)
-        print(f"Audio extracted and saved to {audio_path}")
+        logging.info(f"Audio extracted and saved to {audio_path}")
     except Exception as e:
-        print(f"An error occurred: {e}")
+        logging.exception(f"Could not extract audio from '{video_path}' to '{audio_path}': {e}")
+        raise
     finally:
         if video is not None and hasattr(video, "close"):
             video.close()
