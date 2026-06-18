@@ -187,6 +187,25 @@ def test_select_file_updates_selected_input_and_config(monkeypatch):
     }
 
 
+def test_select_file_uses_platform_dirname_for_last_input_path(monkeypatch):
+    widget, updates = create_widget(monkeypatch)
+    selected_path = r"C:\media\input.mp3"
+    dirname_calls = []
+
+    def fake_dirname(file_name):
+        dirname_calls.append(file_name)
+        return r"C:\media"
+
+    monkeypatch.setattr(gui.os.path, "dirname", fake_dirname)
+    monkeypatch.setattr(gui.QFileDialog, "getOpenFileName", lambda *args, **kwargs: (selected_path, ""))
+
+    widget.select_file()
+
+    assert dirname_calls == [selected_path]
+    assert widget.lastInputPath == r"C:\media"
+    assert updates[-1]["last_input_path"] == r"C:\media"
+
+
 def test_select_output_file_appends_extension_and_updates_config(monkeypatch):
     widget, updates = create_widget(monkeypatch, {"last_output_path": "/old"})
     monkeypatch.setattr(gui.QFileDialog, "getSaveFileName", lambda *args, **kwargs: ("/tmp/output", ""))
@@ -201,6 +220,25 @@ def test_select_output_file_appends_extension_and_updates_config(monkeypatch):
         "last_output_path": "/tmp",
         "auto_apply_cleaning_mode": False,
     }
+
+
+def test_select_output_file_uses_platform_dirname_for_last_output_path(monkeypatch):
+    widget, updates = create_widget(monkeypatch)
+    selected_path = r"C:\media\output"
+    dirname_calls = []
+
+    def fake_dirname(file_name):
+        dirname_calls.append(file_name)
+        return r"C:\media"
+
+    monkeypatch.setattr(gui.os.path, "dirname", fake_dirname)
+    monkeypatch.setattr(gui.QFileDialog, "getSaveFileName", lambda *args, **kwargs: (selected_path, ""))
+
+    widget.select_output_file()
+
+    assert dirname_calls == [r"C:\media\output.srt"]
+    assert widget.lastOutputPath == r"C:\media"
+    assert updates[-1]["last_output_path"] == r"C:\media"
 
 
 def test_widget_preselects_saved_cleaning_mode_when_enabled(monkeypatch):

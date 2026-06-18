@@ -1,4 +1,5 @@
 import sys
+import os
 import subprocess
 import threading
 import importlib
@@ -299,7 +300,7 @@ class SubtitlesGeneratorGUI(QWidget):
         if file_name:
             self.selectedFile = file_name
             self.selectedFileLabel.setText(f"Selected File: {file_name}")
-            self.lastInputPath = "/".join(file_name.split("/")[:-1])
+            self.lastInputPath = os.path.dirname(file_name)
             self.persist_runtime_preferences()
 
     def select_output_file(self):
@@ -312,7 +313,7 @@ class SubtitlesGeneratorGUI(QWidget):
                 file_name += '.srt'
             self.outputPath = file_name
             self.outputPathLabel.setText(f"Output File: {file_name}")
-            self.lastOutputPath = "/".join(file_name.split("/")[:-1])
+            self.lastOutputPath = os.path.dirname(file_name)
             self.persist_runtime_preferences()
 
     def closeEvent(self, event):
