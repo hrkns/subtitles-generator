@@ -459,6 +459,8 @@ def test_run_script_blocks_speechbrain_when_runtime_validation_fails(monkeypatch
     widget.run_script()
 
     assert widget.logTextEdit.lines == ["Validating SpeechBrain enhancement availability..."]
+    assert widget.speechbrainValidationWorker.thread is created["validation_thread"]
+    assert created["validation_thread"].started.callbacks == [widget.speechbrainValidationWorker.run]
     assert created["validation_thread"].started_called is True
     assert widget.btnRunScript.disabled is True
 
