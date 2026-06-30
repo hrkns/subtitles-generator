@@ -1,35 +1,60 @@
 import datetime
+import importlib
 import json
 import logging
 import os
 import re
 import sys
 import magic
-from moviepy.editor import AudioFileClip
 import whisper_timestamped as whisper
-from pydub import AudioSegment
+from pydub import AudioSegment, effects as audio_effects
 from pydub.exceptions import CouldntDecodeError
-from config import TMP_DIR
-from modules import convert_hhmmss_to_ms, format_ms_duration
+from config import AUDIO_CACHE_DIR, TMP_DIR
+from modules import convert_hhmmss_to_ms, format_ms_duration, load_cleaning_settings, save_cleaning_settings
+
+
+def load_moviepy_audio_file_clip():
+    try:
+        return importlib.import_module("moviepy").AudioFileClip
+    except (ImportError, AttributeError):
+        return importlib.import_module("moviepy.editor").AudioFileClip
+
+
+AudioFileClip = load_moviepy_audio_file_clip()
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 
+WORKING_AUDIO_FORMAT = "wav"
+WORKING_AUDIO_FILENAME = f"working_input_audio.{WORKING_AUDIO_FORMAT}"
+SUPPORTED_CLEANING_MODES = ("off", "basic", "speechbrain")
+DEFAULT_CLEANING_MODE = "off"
+PREPROCESSED_AUDIO_FILENAME_TEMPLATE = f"working_input_audio_{{}}.{WORKING_AUDIO_FORMAT}"
+SPEECHBRAIN_MODEL_SOURCE = "speechbrain/metricgan-plus-voicebank"
+SPEECHBRAIN_MODEL_CACHE_DIRNAME = "speechbrain_metricgan_plus_voicebank"
+SPEECHBRAIN_INSTALL_HINT = (
+    "Install them with install_speechbrain_dependencies.cmd on Windows or install_speechbrain_dependencies.sh on Linux/macOS."
+)
+
 def validate_audio_file(file_path):
-    # TODO: Expand validation to support more audio formats.
     if not os.path.exists(file_path):
         logging.error("The provided audio file does not exist.")
         sys.exit(1)
 
-    if not file_path.lower().endswith('.mp3'):
-        logging.error("Unsupported file format. Currently only MP3 is supported.")
-        sys.exit(1)
-
     try:
-        audio = AudioSegment.from_mp3(file_path)
+        audio = AudioSegment.from_file(file_path)
         return audio
-    except CouldntDecodeError:
-        logging.error("Could not decode audio file. Please ensure it's a valid MP3 file.")
+    except CouldntDecodeError as e:
+        logging.error(
+            f"Could not decode audio file '{file_path}'. Please ensure it's a valid audio file. Error: {e}",
+            exc_info=True,
+        )
+        sys.exit(1)
+    except Exception as e:
+        logging.error(
+            f"Could not decode audio file '{file_path}'. Please ensure it's a valid audio file. Error: {e}",
+            exc_info=True,
+        )
         sys.exit(1)
 
 def is_video_file(file_path):
@@ -62,12 +87,172 @@ def extract_audio(video_path, audio_path):
     :param video_path: str, The path to the video file.
     :param audio_path: str, The path to save the extracted audio file.
     """
+    video = None
     try:
         video = AudioFileClip(video_path)
         video.write_audiofile(audio_path)
-        print(f"Audio extracted and saved to {audio_path}")
+        logging.info(f"Audio extracted and saved to {audio_path}")
     except Exception as e:
-        print(f"An error occurred: {e}")
+        logging.exception(f"Could not extract audio from '{video_path}' to '{audio_path}': {e}")
+        raise
+    finally:
+        if video is not None and hasattr(video, "close"):
+            video.close()
+
+def normalize_audio_file(input_audio, output_path, output_format=WORKING_AUDIO_FORMAT):
+    logging.info(f"Normalizing audio to {output_format.upper()} working file...")
+    input_audio.export(output_path, format=output_format)
+    logging.info(f"Normalized audio saved to {output_path}")
+    return output_path
+
+def prepare_working_audio(input_path):
+    working_audio_path = os.path.join(TMP_DIR, WORKING_AUDIO_FILENAME)
+
+    if is_video_file(input_path):
+        extract_audio(input_path, working_audio_path)
+        return working_audio_path, validate_audio_file(working_audio_path)
+
+    input_audio = validate_audio_file(input_path)
+    normalize_audio_file(input_audio, working_audio_path)
+    return working_audio_path, validate_audio_file(working_audio_path)
+
+def get_saved_cleaning_mode():
+    persisted_settings = load_cleaning_settings()
+    saved_mode = persisted_settings.get("default_cleaning_mode")
+
+    if not saved_mode:
+        return None
+
+    if saved_mode not in SUPPORTED_CLEANING_MODES:
+        logging.warning(
+            f"Ignoring unsupported saved cleaning mode '{saved_mode}'. Falling back to built-in default '{DEFAULT_CLEANING_MODE}'."
+        )
+        return None
+
+    logging.info(f"Using saved default cleaning mode '{saved_mode}'.")
+    return saved_mode
+
+def resolve_cleaning_mode(cleaning_mode=None):
+    resolved_mode = cleaning_mode
+
+    if resolved_mode is None:
+        resolved_mode = get_saved_cleaning_mode() or DEFAULT_CLEANING_MODE
+
+    if resolved_mode not in SUPPORTED_CLEANING_MODES:
+        supported_modes = ", ".join(SUPPORTED_CLEANING_MODES)
+        raise ValueError(f"Unsupported cleaning mode '{resolved_mode}'. Supported values are: {supported_modes}.")
+
+    return resolved_mode
+
+def persist_default_cleaning_mode(cleaning_mode, already_resolved=False):
+    resolved_mode = cleaning_mode if already_resolved else resolve_cleaning_mode(cleaning_mode)
+    current_settings = load_cleaning_settings()
+    preselect_saved_cleaning_mode = current_settings.get("preselect_saved_cleaning_mode", False)
+    save_cleaning_settings(
+        resolved_mode,
+        preselect_saved_cleaning_mode=preselect_saved_cleaning_mode,
+    )
+    logging.info(f"Saved default cleaning mode '{resolved_mode}'.")
+    return resolved_mode
+
+def apply_basic_audio_cleaning(input_audio, output_path, output_format=WORKING_AUDIO_FORMAT, strategy_settings=None):
+    if strategy_settings is None:
+        strategy_settings = load_cleaning_settings().get("basic_strategy_settings", {})
+
+    logging.info("Applying basic audio cleaning...")
+    cleaned_audio = input_audio
+
+    high_pass_cutoff_hz = strategy_settings.get("high_pass_cutoff_hz")
+    if high_pass_cutoff_hz is not None:
+        cleaned_audio = audio_effects.high_pass_filter(cleaned_audio, high_pass_cutoff_hz)
+
+    low_pass_cutoff_hz = strategy_settings.get("low_pass_cutoff_hz")
+    if low_pass_cutoff_hz is not None:
+        cleaned_audio = audio_effects.low_pass_filter(cleaned_audio, low_pass_cutoff_hz)
+
+    if strategy_settings.get("apply_dynamic_range_compression", True):
+        cleaned_audio = audio_effects.compress_dynamic_range(cleaned_audio)
+
+    if strategy_settings.get("apply_normalization", True):
+        cleaned_audio = audio_effects.normalize(cleaned_audio)
+
+    cleaned_audio.export(output_path, format=output_format)
+    logging.info(f"Basic cleaned audio saved to {output_path}")
+    return output_path
+
+def load_speechbrain_enhancer(strategy_settings=None):
+    try:
+        enhancement_module = importlib.import_module("speechbrain.inference.enhancement")
+        spectral_mask_enhancement = enhancement_module.SpectralMaskEnhancement
+    except ModuleNotFoundError as e:
+        raise RuntimeError(
+            "SpeechBrain cleaning mode requires the optional speechbrain enhancement dependencies to be installed. "
+            + SPEECHBRAIN_INSTALL_HINT
+        ) from e
+    except Exception as e:
+        raise RuntimeError(
+            "SpeechBrain cleaning mode failed while importing speechbrain.inference.enhancement. "
+            f"Original error: {e}"
+        ) from e
+
+    if strategy_settings is None:
+        strategy_settings = load_cleaning_settings().get("speechbrain_strategy_settings", {})
+
+    model_source = strategy_settings.get("model_source") or SPEECHBRAIN_MODEL_SOURCE
+    savedir = os.path.join(AUDIO_CACHE_DIR, SPEECHBRAIN_MODEL_CACHE_DIRNAME)
+    os.makedirs(savedir, exist_ok=True)
+
+    try:
+        return spectral_mask_enhancement.from_hparams(
+            source=model_source,
+            savedir=savedir,
+        )
+    except Exception as e:
+        raise RuntimeError(
+            f"SpeechBrain cleaning mode could not load its enhancement model into {savedir}. "
+            "Ensure the optional dependencies are installed, network access is available for the first download, "
+            "and the cache directory is writable."
+        ) from e
+
+def apply_speechbrain_audio_cleaning(input_path, output_path):
+    logging.info("Applying SpeechBrain audio cleaning...")
+    enhancer = load_speechbrain_enhancer()
+
+    try:
+        enhancer.enhance_file(input_path, output_path)
+    except Exception as e:
+        raise RuntimeError("SpeechBrain cleaning mode failed while enhancing the working audio.") from e
+
+    if not os.path.exists(output_path):
+        raise RuntimeError("SpeechBrain cleaning mode did not produce an enhanced audio file.")
+
+    logging.info(f"SpeechBrain cleaned audio saved to {output_path}")
+    return output_path
+
+def apply_audio_cleaning(working_audio_path, cleaning_mode=None, working_audio=None):
+    resolved_mode = resolve_cleaning_mode(cleaning_mode)
+
+    if resolved_mode == DEFAULT_CLEANING_MODE:
+        logging.info("Audio cleaning mode set to off. Using normalized working audio.")
+        if working_audio is None:
+            working_audio = validate_audio_file(working_audio_path)
+        return working_audio_path, working_audio
+
+    cleaned_audio_path = os.path.join(TMP_DIR, PREPROCESSED_AUDIO_FILENAME_TEMPLATE.format(resolved_mode))
+
+    if resolved_mode == "basic":
+        source_audio = working_audio
+        if source_audio is None:
+            source_audio = validate_audio_file(working_audio_path)
+        apply_basic_audio_cleaning(source_audio, cleaned_audio_path)
+    elif resolved_mode == "speechbrain":
+        apply_speechbrain_audio_cleaning(working_audio_path, cleaned_audio_path)
+
+    return cleaned_audio_path, validate_audio_file(cleaned_audio_path)
+
+def prepare_transcription_audio(input_path, cleaning_mode=None):
+    working_audio_path, working_audio = prepare_working_audio(input_path)
+    return apply_audio_cleaning(working_audio_path, cleaning_mode, working_audio)
 
 def parse_segments(segments_str, total_duration_ms):
     segments = []
@@ -151,29 +336,30 @@ def process_audio_segments(input_audio, segments_to_process, audio_language, spe
         # Save the audio segment to a temporary file
         # TODO: if a single segment is provided, don't create a temporary file, instead use the original input audio file directly, for optimization.
         logging.info("Creating tmp audio segment...")
-        output_format = "mp3"
-        temp_audio_file = f"{TMP_DIR}temp_segment_{segment_number}.{output_format}"
+        output_format = WORKING_AUDIO_FORMAT
+        temp_audio_file = os.path.join(TMP_DIR, f"temp_segment_{segment_number}.{output_format}")
         audio_segment.export(temp_audio_file, format=output_format)
         logging.info("Created temporary audio segment.")
 
-        # Transcribe the audio segment
-        logging.info("Transforming speech segment to text...")
-        segment_audio = whisper.load_audio(temp_audio_file)
-        logging.info("Loaded audio segment. Transcribing...")
         try:
-            result = whisper.transcribe(speech_to_text_model, segment_audio, language=audio_language)
-        except Exception as e:
-            raise RuntimeError(f"An error occurred while transcribing the audio segment #{segment_number}: {str(e)}")
-        logging.info("Transformed speech segment to text. Writing to tmp JSON file...")
+            # Transcribe the audio segment
+            logging.info("Transforming speech segment to text...")
+            segment_audio = whisper.load_audio(temp_audio_file)
+            logging.info("Loaded audio segment. Transcribing...")
+            try:
+                result = whisper.transcribe(speech_to_text_model, segment_audio, language=audio_language)
+            except Exception as e:
+                raise RuntimeError(f"An error occurred while transcribing the audio segment #{segment_number}: {str(e)}") from e
+            logging.info("Transformed speech segment to text. Writing to tmp JSON file...")
 
-        # Save the result to a JSON file
-        output_json_file = output_json_template.format(format_ms_duration(segment_start) + "_" + format_ms_duration(segment_end))
-        with open(output_json_file, 'w', encoding='utf-8') as file:
-            json.dump(result, file, ensure_ascii=False, indent=2)
-        logging.info(f'Content has been written to the file {output_json_file}')
-
-        # Remove the temporary audio file
-        os.remove(temp_audio_file)
+            # Save the result to a JSON file
+            output_json_file = output_json_template.format(format_ms_duration(segment_start) + "_" + format_ms_duration(segment_end))
+            with open(output_json_file, 'w', encoding='utf-8') as file:
+                json.dump(result, file, ensure_ascii=False, indent=2)
+            logging.info(f'Content has been written to the file {output_json_file}')
+        finally:
+            if os.path.exists(temp_audio_file):
+                os.remove(temp_audio_file)
 
         logging.info(f"Completed processing for segment {segment_number}")
 
@@ -220,7 +406,7 @@ def generate_time_checkpoints(pattern, total_milliseconds):
         current_seconds += interval_seconds
 
     if len(checkpoints) == 0:
-        checkpoints.append((total_seconds, str(datetime.timedelta(seconds=total_seconds))))
+        checkpoints.append((total_milliseconds, str(datetime.timedelta(seconds=total_seconds))))
 
     return checkpoints
 
@@ -291,6 +477,8 @@ def generate_segments_from_checkpoints(checkpoints, total_duration_ms):
 def process_input(args):
     # extract command line args and set defaults
     checkpoints = args.checkpoints
+    explicit_cleaning_mode = getattr(args, "cleaning_mode", None)
+    cleaning_mode = resolve_cleaning_mode(explicit_cleaning_mode)
     segments = args.segments
     input_path = args.input
     audio_language = args.language or 'en'
@@ -306,17 +494,15 @@ def process_input(args):
     if not os.path.exists(TMP_DIR):
         os.makedirs(TMP_DIR)
 
-    # Extract the audio from the video file if the input is a video
-    input_audio_path = ''
-    if is_video_file(input_path):
-        input_audio_path = TMP_DIR + "input_audio.mp3"
-        extract_audio(input_path, input_audio_path)
-    # Otherwise, assume the input is an audio file
-    else:
-        input_audio_path = input_path
+    if getattr(args, "save_cleaning_mode", False) and explicit_cleaning_mode is not None:
+        try:
+            persist_default_cleaning_mode(cleaning_mode, already_resolved=True)
+        except Exception as e:
+            logging.error(f"Could not persist cleaning mode '{cleaning_mode}': {str(e)}")
 
-    # Validate the input audio file and rewrite path if necessary
-    input_audio = validate_audio_file(input_audio_path)
+    # Prepare the normalized and optionally cleaned working audio used by transcription.
+    transcription_audio_path, input_audio = prepare_transcription_audio(input_path, cleaning_mode)
+    logging.info(f"Prepared transcription audio at {transcription_audio_path} using cleaning mode '{cleaning_mode}'.")
 
     # Get the total duration of the audio in milliseconds
     total_duration_ms = len(input_audio)
@@ -340,5 +526,5 @@ def process_input(args):
     # Process the audio segments
     # The speech to text result for each segment will be saved to a JSON file.
     # The content of the generated JSON files is used then in the generate_output.py script as input to generate the final subtitles output.
-    output_json_template = TMP_DIR + "speech_recognition_result_segment_{}.json"
+    output_json_template = os.path.join(TMP_DIR, "speech_recognition_result_segment_{}.json")
     process_audio_segments(input_audio, segments_to_process, audio_language, speech_to_text_model, output_json_template)

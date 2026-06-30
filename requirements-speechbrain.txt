@@ -1,0 +1,5 @@
+# Optional dependencies for the heavy SpeechBrain cleaning mode.
+# This stack is only required when using --cleaning-mode speechbrain.
+torch
+torchaudio
+speechbrain

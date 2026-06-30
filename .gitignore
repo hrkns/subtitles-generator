@@ -154,3 +154,6 @@ cython_debug/
 tmp
 src
 .cache*
+.app-config.json
+.cleaning-settings.json
+audio_cache/
