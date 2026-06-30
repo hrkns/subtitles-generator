@@ -1,12 +1,11 @@
 import sys
 import os
 import subprocess
-import threading
 import importlib
 import logging
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QTextEdit, QLabel, QFileDialog, QMessageBox, QComboBox, QCheckBox
-from PyQt5.QtCore import pyqtSignal, QObject 
+from PyQt5.QtCore import pyqtSignal, QObject, QThread
 from modules import load_app_config, update_app_config
 
 
@@ -267,6 +266,18 @@ class SubtitlesGeneratorGUI(QWidget):
             if hasattr(control, "setDisabled"):
                 control.setDisabled(disabled)
 
+    def start_qthread_worker(self, worker, finished_signal):
+        thread = QThread(self)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        finished_signal.connect(lambda *_args: thread.quit())
+        if hasattr(worker, "deleteLater"):
+            finished_signal.connect(lambda *_args: worker.deleteLater())
+        if hasattr(thread, "deleteLater"):
+            thread.finished.connect(thread.deleteLater)
+        thread.start()
+        return thread
+
     def start_speechbrain_runtime_validation(self):
         self.logTextEdit.append("Validating SpeechBrain enhancement availability...")
         self.cleaningModeStatusLabel.setText(
@@ -278,8 +289,10 @@ class SubtitlesGeneratorGUI(QWidget):
 
         self.speechbrainValidationWorker = SpeechBrainRuntimeValidationWorker()
         self.speechbrainValidationWorker.finished.connect(self.speechbrain_runtime_validation_finished)
-        self.speechbrainValidationThread = threading.Thread(target=self.speechbrainValidationWorker.run)
-        self.speechbrainValidationThread.start()
+        self.speechbrainValidationThread = self.start_qthread_worker(
+            self.speechbrainValidationWorker,
+            self.speechbrainValidationWorker.finished,
+        )
 
     def speechbrain_runtime_validation_finished(self, is_ready, message):
         self.speechbrainValidationWorker = None
@@ -329,7 +342,8 @@ class SubtitlesGeneratorGUI(QWidget):
 
             if reply == QMessageBox.Yes:
                 self.worker.stop()
-                self.thread.join()
+                self.thread.quit()
+                self.thread.wait()
             else:
                 event.ignore()
                 return
@@ -354,8 +368,7 @@ class SubtitlesGeneratorGUI(QWidget):
         self.worker = Worker(command)
         self.worker.output.connect(self.logTextEdit.append)
         self.worker.finished.connect(self.script_finished)
-        self.thread = threading.Thread(target=self.worker.run)
-        self.thread.start()
+        self.thread = self.start_qthread_worker(self.worker, self.worker.finished)
 
     def run_script(self):
         # Check for file selection

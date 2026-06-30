@@ -69,17 +69,27 @@ class FakeSignal:
             callback(*args, **kwargs)
 
 
-class FakeThread:
-    def __init__(self, target):
-        self.target = target
-        self.started = False
-        self.joined = False
+class FakeQThread:
+    def __init__(self, *_args, **_kwargs):
+        self.started = FakeSignal()
+        self.finished = FakeSignal()
+        self.started_called = False
+        self.quit_called = False
+        self.waited = False
+        self.deleted = False
 
     def start(self):
-        self.started = True
+        self.started_called = True
 
-    def join(self):
-        self.joined = True
+    def quit(self):
+        self.quit_called = True
+        self.finished.emit()
+
+    def wait(self):
+        self.waited = True
+
+    def deleteLater(self):
+        self.deleted = True
 
 
 class FakeWorkerForGui:
@@ -88,9 +98,17 @@ class FakeWorkerForGui:
         self.output = FakeSignal()
         self.finished = FakeSignal()
         self.stopped = False
+        self.thread = None
+        self.deleted = False
+
+    def moveToThread(self, thread):
+        self.thread = thread
 
     def run(self):
         return None
+
+    def deleteLater(self):
+        self.deleted = True
 
     def stop(self):
         self.stopped = True
@@ -361,13 +379,13 @@ def test_run_script_starts_worker_and_disables_controls(monkeypatch):
         created["worker"] = worker
         return worker
 
-    def fake_thread_factory(target):
-        thread = FakeThread(target)
+    def fake_thread_factory(*_args, **_kwargs):
+        thread = FakeQThread()
         created["thread"] = thread
         return thread
 
     monkeypatch.setattr(gui, "Worker", fake_worker_factory)
-    monkeypatch.setattr(gui.threading, "Thread", fake_thread_factory)
+    monkeypatch.setattr(gui, "QThread", fake_thread_factory)
 
     widget.run_script()
 
@@ -397,7 +415,9 @@ def test_run_script_starts_worker_and_disables_controls(monkeypatch):
         "--cleaning-mode",
         "basic",
     ]
-    assert created["thread"].started is True
+    assert created["worker"].thread is created["thread"]
+    assert created["thread"].started_called is True
+    assert created["thread"].started.callbacks == [created["worker"].run]
 
 
 def test_run_script_blocks_unavailable_speechbrain_before_execution(monkeypatch):
@@ -420,8 +440,8 @@ def test_run_script_blocks_speechbrain_when_runtime_validation_fails(monkeypatch
     widget.speechbrainDependencyAvailable = True
     created = {}
 
-    def fake_thread_factory(target):
-        thread = FakeThread(target)
+    def fake_thread_factory(*_args, **_kwargs):
+        thread = FakeQThread()
         created["validation_thread"] = thread
         return thread
 
@@ -430,7 +450,7 @@ def test_run_script_blocks_speechbrain_when_runtime_validation_fails(monkeypatch
         "validate_speechbrain_runtime_ready",
         lambda: (_ for _ in ()).throw(RuntimeError("SpeechBrain enhancement is unavailable: model download failed")),
     )
-    monkeypatch.setattr(gui.threading, "Thread", fake_thread_factory)
+    monkeypatch.setattr(gui, "QThread", fake_thread_factory)
 
     widget.selectedFile = "/tmp/input.mp3"
     widget.outputPath = "/tmp/output.srt"
@@ -439,10 +459,10 @@ def test_run_script_blocks_speechbrain_when_runtime_validation_fails(monkeypatch
     widget.run_script()
 
     assert widget.logTextEdit.lines == ["Validating SpeechBrain enhancement availability..."]
-    assert created["validation_thread"].started is True
+    assert created["validation_thread"].started_called is True
     assert widget.btnRunScript.disabled is True
 
-    created["validation_thread"].target()
+    created["validation_thread"].started.emit()
 
     assert widget.logTextEdit.lines == [
         "Validating SpeechBrain enhancement availability...",
@@ -463,8 +483,8 @@ def test_run_script_validates_speechbrain_then_starts_worker(monkeypatch):
         created["worker"] = worker
         return worker
 
-    def fake_thread_factory(target):
-        thread = FakeThread(target)
+    def fake_thread_factory(*_args, **_kwargs):
+        thread = FakeQThread()
         created["threads"].append(thread)
         return thread
 
@@ -473,7 +493,7 @@ def test_run_script_validates_speechbrain_then_starts_worker(monkeypatch):
 
     monkeypatch.setattr(gui, "validate_speechbrain_runtime_ready", fake_validate_speechbrain_runtime_ready)
     monkeypatch.setattr(gui, "Worker", fake_worker_factory)
-    monkeypatch.setattr(gui.threading, "Thread", fake_thread_factory)
+    monkeypatch.setattr(gui, "QThread", fake_thread_factory)
 
     widget.selectedFile = "/tmp/input.mp3"
     widget.outputPath = "/tmp/output.srt"
@@ -483,10 +503,10 @@ def test_run_script_validates_speechbrain_then_starts_worker(monkeypatch):
 
     assert widget.logTextEdit.lines == ["Validating SpeechBrain enhancement availability..."]
     assert created["validation_calls"] == 0
-    assert created["threads"][0].started is True
+    assert created["threads"][0].started_called is True
     assert "worker" not in created
 
-    created["threads"][0].target()
+    created["threads"][0].started.emit()
 
     assert widget.logTextEdit.lines == [
         "Validating SpeechBrain enhancement availability...",
@@ -506,7 +526,8 @@ def test_run_script_validates_speechbrain_then_starts_worker(monkeypatch):
         "speechbrain",
     ]
     assert created["validation_calls"] == 1
-    assert created["threads"][1].started is True
+    assert created["worker"].thread is created["threads"][1]
+    assert created["threads"][1].started_called is True
 
 
 def test_cancel_script_stops_worker_and_restores_controls(monkeypatch):
@@ -530,7 +551,7 @@ def test_close_event_ignores_when_user_declines_running_process(monkeypatch):
     widget, updates = create_widget(monkeypatch)
     worker = FakeWorkerForGui([])
     worker.is_running = lambda: True
-    thread = FakeThread(None)
+    thread = FakeQThread()
     widget.worker = worker
     widget.thread = thread
     event = DummyEvent()
@@ -541,7 +562,7 @@ def test_close_event_ignores_when_user_declines_running_process(monkeypatch):
 
     assert event.ignored is True
     assert worker.stopped is False
-    assert thread.joined is False
+    assert thread.waited is False
     assert updates == []
 
 
@@ -549,7 +570,7 @@ def test_close_event_stops_running_process_and_persists_preferences(monkeypatch)
     widget, updates = create_widget(monkeypatch)
     worker = FakeWorkerForGui([])
     worker.is_running = lambda: True
-    thread = FakeThread(None)
+    thread = FakeQThread()
     widget.worker = worker
     widget.thread = thread
     widget.autoApplyCleaningModeCheckBox.setChecked(True)
@@ -561,7 +582,8 @@ def test_close_event_stops_running_process_and_persists_preferences(monkeypatch)
 
     assert event.ignored is False
     assert worker.stopped is True
-    assert thread.joined is True
+    assert thread.quit_called is True
+    assert thread.waited is True
     assert updates[-1] == {
         "last_input_path": "",
         "last_output_path": "",

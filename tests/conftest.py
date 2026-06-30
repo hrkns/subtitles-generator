@@ -121,7 +121,32 @@ def _install_stub_modules():
 
         class QObject:
             def __init__(self, *_args, **_kwargs):
+                self.thread = None
+
+            def moveToThread(self, thread):
+                self.thread = thread
+
+            def deleteLater(self):
                 return None
+
+        class QThread(QObject):
+            def __init__(self, *_args, **_kwargs):
+                super().__init__()
+                self.started = _BoundSignal()
+                self.finished = _BoundSignal()
+                self.started_called = False
+                self.quit_called = False
+                self.waited = False
+
+            def start(self):
+                self.started_called = True
+
+            def quit(self):
+                self.quit_called = True
+                self.finished.emit()
+
+            def wait(self):
+                self.waited = True
 
         class QWidget:
             def __init__(self, *_args, **_kwargs):
@@ -251,6 +276,7 @@ def _install_stub_modules():
                 self.path = path
 
         qtcore_module.QObject = QObject
+        qtcore_module.QThread = QThread
         qtcore_module.pyqtSignal = pyqtSignal
         qtgui_module.QIcon = QIcon
         qtwidgets_module.QApplication = QApplication
