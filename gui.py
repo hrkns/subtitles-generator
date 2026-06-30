@@ -21,8 +21,13 @@ def is_speechbrain_dependency_available():
     try:
         importlib.import_module("speechbrain.inference.enhancement")
         return True
-    except Exception:
+    except ModuleNotFoundError:
         return False
+    except Exception as e:
+        logging.warning(
+            f"SpeechBrain dependencies are installed but failed during import; runtime validation will report details. Error: {e}"
+        )
+        return True
 
 
 def validate_speechbrain_runtime_ready():

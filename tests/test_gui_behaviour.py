@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 
 import gui
@@ -293,6 +295,30 @@ def test_build_command_uses_preselected_saved_cleaning_mode(monkeypatch):
         "--cleaning-mode",
         "basic",
     ]
+
+
+def test_speechbrain_dependency_available_returns_false_for_missing_module(monkeypatch):
+    monkeypatch.setattr(
+        gui.importlib,
+        "import_module",
+        lambda module_name: (_ for _ in ()).throw(ModuleNotFoundError(module_name)),
+    )
+
+    assert gui.is_speechbrain_dependency_available() is False
+
+
+def test_speechbrain_dependency_available_defers_runtime_import_errors_to_validation(monkeypatch, caplog):
+    monkeypatch.setattr(
+        gui.importlib,
+        "import_module",
+        lambda module_name: (_ for _ in ()).throw(RuntimeError("torchaudio C++ extension mismatch")),
+    )
+
+    with caplog.at_level(logging.WARNING):
+        assert gui.is_speechbrain_dependency_available() is True
+
+    assert "runtime validation will report details" in caplog.text
+    assert "torchaudio C++ extension mismatch" in caplog.text
 
 
 def test_cleaning_mode_status_reports_unavailable_speechbrain(monkeypatch):
