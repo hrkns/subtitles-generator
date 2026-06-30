@@ -581,11 +581,11 @@ def test_process_audio_segments_wraps_transcription_failures(tmp_path, monkeypat
     monkeypatch.setattr(process_input_module.whisper, "load_audio", lambda file_path: file_path)
 
     def fake_transcribe(model, audio, language=None):
-        raise Exception("transcription failed")
+        raise RuntimeError("transcription failed")
 
     monkeypatch.setattr(process_input_module.whisper, "transcribe", fake_transcribe)
 
-    with pytest.raises(RuntimeError, match="audio segment #1: transcription failed"):
+    with pytest.raises(RuntimeError, match="audio segment #1: transcription failed") as exc_info:
         process_input_module.process_audio_segments(
             input_audio,
             [(0, 2000)],
@@ -594,5 +594,7 @@ def test_process_audio_segments_wraps_transcription_failures(tmp_path, monkeypat
             f"{tmp_path}{os.sep}result_{{}}.json",
         )
 
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
+    assert str(exc_info.value.__cause__) == "transcription failed"
     assert not (tmp_path / "result_000000_000002.json").exists()
     assert not (tmp_path / "temp_segment_1.wav").exists()
