@@ -63,7 +63,7 @@ The application can also be initiated with specific parameters detailed below:
 - `-i` or `--input`: The path to the input audio file in a supported audio format or supported video format. This argument is required.
   - The input is normalized into an internal WAV working file before segmentation and transcription.
   - You can leave cleaning disabled with `off`, use the default lightweight `basic` mode after the base install, or enable the optional heavier `speechbrain` mode after running the separate SpeechBrain installer.
-  - Guaranteed supported input extensions are listed in the [Supported Input Formats](#supported-input-formats) section above.
+  - Guaranteed supported input extensions are listed in the [Supported Input Formats](#supported-input-formats) section.
 
 #### Optional Arguments:
 
