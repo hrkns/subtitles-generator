@@ -516,6 +516,42 @@ def test_load_speechbrain_enhancer_reports_model_load_failure_with_cache_path(tm
     assert os.path.isdir(expected_savedir)
 
 
+def test_load_speechbrain_enhancer_uses_saved_model_source(tmp_path, monkeypatch):
+    monkeypatch.setattr(process_input_module, "AUDIO_CACHE_DIR", f"{tmp_path}{os.sep}cache{os.sep}")
+
+    calls = {}
+    fake_enhancer = object()
+
+    class FakeSpectralMaskEnhancement:
+        @staticmethod
+        def from_hparams(source, savedir):
+            calls["from_hparams"] = (source, savedir)
+            return fake_enhancer
+
+    monkeypatch.setattr(
+        process_input_module.importlib,
+        "import_module",
+        lambda module_name: types.SimpleNamespace(SpectralMaskEnhancement=FakeSpectralMaskEnhancement),
+    )
+    monkeypatch.setattr(
+        process_input_module,
+        "load_cleaning_settings",
+        lambda: {
+            "speechbrain_strategy_settings": {
+                "model_source": "custom/speechbrain-model",
+            },
+        },
+    )
+
+    expected_savedir = os.path.join(
+        process_input_module.AUDIO_CACHE_DIR,
+        process_input_module.SPEECHBRAIN_MODEL_CACHE_DIRNAME,
+    )
+
+    assert process_input_module.load_speechbrain_enhancer() is fake_enhancer
+    assert calls["from_hparams"] == ("custom/speechbrain-model", expected_savedir)
+
+
 def test_apply_audio_cleaning_speechbrain_enhances_working_audio(tmp_path, monkeypatch):
     monkeypatch.setattr(process_input_module, "TMP_DIR", f"{tmp_path}{os.sep}")
     monkeypatch.setattr(process_input_module, "AUDIO_CACHE_DIR", f"{tmp_path}{os.sep}cache{os.sep}")

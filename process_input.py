@@ -180,7 +180,7 @@ def apply_basic_audio_cleaning(input_audio, output_path, output_format=WORKING_A
     logging.info(f"Basic cleaned audio saved to {output_path}")
     return output_path
 
-def load_speechbrain_enhancer():
+def load_speechbrain_enhancer(strategy_settings=None):
     try:
         enhancement_module = importlib.import_module("speechbrain.inference.enhancement")
         spectral_mask_enhancement = enhancement_module.SpectralMaskEnhancement
@@ -195,12 +195,16 @@ def load_speechbrain_enhancer():
             f"Original error: {e}"
         ) from e
 
+    if strategy_settings is None:
+        strategy_settings = load_cleaning_settings().get("speechbrain_strategy_settings", {})
+
+    model_source = strategy_settings.get("model_source") or SPEECHBRAIN_MODEL_SOURCE
     savedir = os.path.join(AUDIO_CACHE_DIR, SPEECHBRAIN_MODEL_CACHE_DIRNAME)
     os.makedirs(savedir, exist_ok=True)
 
     try:
         return spectral_mask_enhancement.from_hparams(
-            source=SPEECHBRAIN_MODEL_SOURCE,
+            source=model_source,
             savedir=savedir,
         )
     except Exception as e:
