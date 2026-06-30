@@ -559,7 +559,7 @@ def test_run_script_validates_speechbrain_then_starts_worker(monkeypatch):
     assert created["threads"][1].started_called is True
 
 
-def test_cancel_script_stops_worker_and_restores_controls(monkeypatch):
+def test_cancel_script_requests_worker_stop_and_waits_for_finished_signal_to_restore_controls(monkeypatch):
     widget, _updates = create_widget(monkeypatch)
     widget.worker = FakeWorkerForGui([])
     widget.btnRunScript.setDisabled(True)
@@ -570,6 +570,13 @@ def test_cancel_script_stops_worker_and_restores_controls(monkeypatch):
     widget.cancel_script()
 
     assert widget.worker.stopped is True
+    assert widget.btnRunScript.disabled is True
+    assert widget.btnSelectFile.disabled is True
+    assert widget.btnSelectOutput.disabled is True
+    assert widget.btnCancelScript.visible is True
+
+    widget.script_finished()
+
     assert widget.btnRunScript.disabled is False
     assert widget.btnSelectFile.disabled is False
     assert widget.btnSelectOutput.disabled is False

@@ -396,7 +396,6 @@ class SubtitlesGeneratorGUI(QWidget):
     def cancel_script(self):
         # Stop the script execution
         self.worker.stop()
-        self.script_finished()
 
     def script_finished(self):
         # Re-enable the run button and hide the cancel button
