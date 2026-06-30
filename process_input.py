@@ -155,12 +155,27 @@ def persist_default_cleaning_mode(cleaning_mode, already_resolved=False):
     logging.info(f"Saved default cleaning mode '{resolved_mode}'.")
     return resolved_mode
 
-def apply_basic_audio_cleaning(input_audio, output_path, output_format=WORKING_AUDIO_FORMAT):
+def apply_basic_audio_cleaning(input_audio, output_path, output_format=WORKING_AUDIO_FORMAT, strategy_settings=None):
+    if strategy_settings is None:
+        strategy_settings = load_cleaning_settings().get("basic_strategy_settings", {})
+
     logging.info("Applying basic audio cleaning...")
-    cleaned_audio = audio_effects.high_pass_filter(input_audio, 120)
-    cleaned_audio = audio_effects.low_pass_filter(cleaned_audio, 7600)
-    cleaned_audio = audio_effects.compress_dynamic_range(cleaned_audio)
-    cleaned_audio = audio_effects.normalize(cleaned_audio)
+    cleaned_audio = input_audio
+
+    high_pass_cutoff_hz = strategy_settings.get("high_pass_cutoff_hz")
+    if high_pass_cutoff_hz is not None:
+        cleaned_audio = audio_effects.high_pass_filter(cleaned_audio, high_pass_cutoff_hz)
+
+    low_pass_cutoff_hz = strategy_settings.get("low_pass_cutoff_hz")
+    if low_pass_cutoff_hz is not None:
+        cleaned_audio = audio_effects.low_pass_filter(cleaned_audio, low_pass_cutoff_hz)
+
+    if strategy_settings.get("apply_dynamic_range_compression", True):
+        cleaned_audio = audio_effects.compress_dynamic_range(cleaned_audio)
+
+    if strategy_settings.get("apply_normalization", True):
+        cleaned_audio = audio_effects.normalize(cleaned_audio)
+
     cleaned_audio.export(output_path, format=output_format)
     logging.info(f"Basic cleaned audio saved to {output_path}")
     return output_path

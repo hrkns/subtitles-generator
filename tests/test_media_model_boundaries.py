@@ -398,6 +398,76 @@ def test_apply_audio_cleaning_basic_exports_cleaned_wav(tmp_path, monkeypatch):
     ]
 
 
+def test_apply_audio_cleaning_basic_uses_saved_strategy_settings(tmp_path, monkeypatch):
+    monkeypatch.setattr(process_input_module, "TMP_DIR", f"{tmp_path}{os.sep}")
+
+    effect_calls = []
+    source_audio = object()
+    audio_after_high_pass = object()
+    audio_after_low_pass = FakeExportableAudio()
+    cleaned_audio = object()
+    expected_output_path = os.path.join(
+        process_input_module.TMP_DIR,
+        process_input_module.PREPROCESSED_AUDIO_FILENAME_TEMPLATE.format("basic"),
+    )
+
+    monkeypatch.setattr(
+        process_input_module,
+        "load_cleaning_settings",
+        lambda: {
+            "basic_strategy_settings": {
+                "high_pass_cutoff_hz": 180,
+                "low_pass_cutoff_hz": 6400,
+                "apply_dynamic_range_compression": False,
+                "apply_normalization": False,
+            },
+        },
+    )
+    monkeypatch.setattr(
+        process_input_module.audio_effects,
+        "high_pass_filter",
+        lambda audio, cutoff: effect_calls.append(("high_pass_filter", audio, cutoff)) or audio_after_high_pass,
+    )
+    monkeypatch.setattr(
+        process_input_module.audio_effects,
+        "low_pass_filter",
+        lambda audio, cutoff: effect_calls.append(("low_pass_filter", audio, cutoff)) or audio_after_low_pass,
+    )
+    monkeypatch.setattr(
+        process_input_module.audio_effects,
+        "compress_dynamic_range",
+        lambda audio: effect_calls.append(("compress_dynamic_range", audio)) or audio,
+    )
+    monkeypatch.setattr(
+        process_input_module.audio_effects,
+        "normalize",
+        lambda audio: effect_calls.append(("normalize", audio)) or audio,
+    )
+
+    def fake_validate_audio_file(file_path):
+        if file_path == expected_output_path:
+            return cleaned_audio
+        raise AssertionError(f"Unexpected validation path: {file_path}")
+
+    monkeypatch.setattr(process_input_module, "validate_audio_file", fake_validate_audio_file)
+
+    cleaned_audio_path, validated_audio = process_input_module.apply_audio_cleaning(
+        "working.wav",
+        "basic",
+        source_audio,
+    )
+
+    assert cleaned_audio_path == expected_output_path
+    assert validated_audio is cleaned_audio
+    assert effect_calls == [
+        ("high_pass_filter", source_audio, 180),
+        ("low_pass_filter", audio_after_high_pass, 6400),
+    ]
+    assert audio_after_low_pass.export_calls == [
+        (expected_output_path, process_input_module.WORKING_AUDIO_FORMAT)
+    ]
+
+
 def test_load_speechbrain_enhancer_reports_missing_dependency(monkeypatch):
     def fake_import_module(module_name):
         raise ModuleNotFoundError(module_name)
