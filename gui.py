@@ -62,17 +62,22 @@ class Worker(QObject):
         self.process = None
 
     def run(self):
-        # Run the command in a subprocess and emit its output
-        self.process = subprocess.Popen(self.command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+        try:
+            # Run the command in a subprocess and emit its output
+            self.process = subprocess.Popen(self.command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
 
-        for stdout_line in iter(self.process.stdout.readline, ""):
-            self.output.emit(stdout_line)
+            for stdout_line in iter(self.process.stdout.readline, ""):
+                self.output.emit(stdout_line)
 
-        self.process.stdout.close()
-        return_code = self.process.wait()
-        if return_code:
-            raise subprocess.CalledProcessError(return_code, self.command)
-        self.finished.emit()
+            self.process.stdout.close()
+            return_code = self.process.wait()
+            if return_code:
+                raise subprocess.CalledProcessError(return_code, self.command)
+        except Exception as e:
+            logging.exception("Script execution failed.")
+            self.output.emit(f"Script execution failed: {str(e)}")
+        finally:
+            self.finished.emit()
 
     def is_running(self):
         return self.process is not None and self.process.poll() is None

@@ -171,14 +171,41 @@ def test_worker_run_emits_output_and_finished(monkeypatch):
     assert fake_process.stdout.closed is True
 
 
-def test_worker_run_raises_for_non_zero_exit(monkeypatch):
+def test_worker_run_reports_non_zero_exit_and_finishes(monkeypatch):
     fake_process = FakeProcess(return_code=1)
     monkeypatch.setattr(gui.subprocess, "Popen", lambda *args, **kwargs: fake_process)
 
     worker = gui.Worker(["python", "main.py"])
+    output_lines = []
+    finished = []
+    worker.output.connect(output_lines.append)
+    worker.finished.connect(lambda: finished.append(True))
 
-    with pytest.raises(gui.subprocess.CalledProcessError):
-        worker.run()
+    worker.run()
+
+    assert len(output_lines) == 1
+    assert "Script execution failed:" in output_lines[0]
+    assert "returned non-zero exit status 1" in output_lines[0]
+    assert finished == [True]
+
+
+def test_worker_run_reports_startup_errors_and_finishes(monkeypatch):
+    monkeypatch.setattr(
+        gui.subprocess,
+        "Popen",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("python executable missing")),
+    )
+
+    worker = gui.Worker(["python", "main.py"])
+    output_lines = []
+    finished = []
+    worker.output.connect(output_lines.append)
+    worker.finished.connect(lambda: finished.append(True))
+
+    worker.run()
+
+    assert output_lines == ["Script execution failed: python executable missing"]
+    assert finished == [True]
 
 
 def test_worker_stop_terminates_running_process():
