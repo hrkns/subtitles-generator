@@ -126,6 +126,41 @@ def test_is_video_file_detects_non_video_mime(monkeypatch):
     assert process_input_module.is_video_file("audio.mp3") is False
 
 
+def test_load_moviepy_audio_file_clip_prefers_top_level_export(monkeypatch):
+    sentinel_audio_file_clip = object()
+    import_calls = []
+
+    def fake_import_module(module_name):
+        import_calls.append(module_name)
+        if module_name == "moviepy":
+            return types.SimpleNamespace(AudioFileClip=sentinel_audio_file_clip)
+        raise AssertionError(f"Unexpected import: {module_name}")
+
+    monkeypatch.setattr(process_input_module.importlib, "import_module", fake_import_module)
+
+    assert process_input_module.load_moviepy_audio_file_clip() is sentinel_audio_file_clip
+    assert import_calls == ["moviepy"]
+
+
+@pytest.mark.parametrize("top_level_failure", [ImportError("cannot import name AudioFileClip"), AttributeError("AudioFileClip")])
+def test_load_moviepy_audio_file_clip_falls_back_to_moviepy_editor(monkeypatch, top_level_failure):
+    sentinel_audio_file_clip = object()
+    import_calls = []
+
+    def fake_import_module(module_name):
+        import_calls.append(module_name)
+        if module_name == "moviepy":
+            raise top_level_failure
+        if module_name == "moviepy.editor":
+            return types.SimpleNamespace(AudioFileClip=sentinel_audio_file_clip)
+        raise AssertionError(f"Unexpected import: {module_name}")
+
+    monkeypatch.setattr(process_input_module.importlib, "import_module", fake_import_module)
+
+    assert process_input_module.load_moviepy_audio_file_clip() is sentinel_audio_file_clip
+    assert import_calls == ["moviepy", "moviepy.editor"]
+
+
 def test_extract_audio_writes_audio_file(monkeypatch, caplog):
     calls = {}
 

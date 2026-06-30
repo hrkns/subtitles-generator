@@ -6,12 +6,21 @@ import os
 import re
 import sys
 import magic
-from moviepy import AudioFileClip
 import whisper_timestamped as whisper
 from pydub import AudioSegment, effects as audio_effects
 from pydub.exceptions import CouldntDecodeError
 from config import AUDIO_CACHE_DIR, TMP_DIR
 from modules import convert_hhmmss_to_ms, format_ms_duration, load_cleaning_settings, save_cleaning_settings
+
+
+def load_moviepy_audio_file_clip():
+    try:
+        return importlib.import_module("moviepy").AudioFileClip
+    except (ImportError, AttributeError):
+        return importlib.import_module("moviepy.editor").AudioFileClip
+
+
+AudioFileClip = load_moviepy_audio_file_clip()
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
