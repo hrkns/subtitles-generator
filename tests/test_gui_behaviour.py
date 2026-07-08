@@ -625,3 +625,41 @@ def test_close_event_stops_running_process_and_persists_preferences(monkeypatch)
         "last_output_path": "",
         "auto_apply_cleaning_mode": True,
     }
+
+
+def test_close_event_waits_for_running_speechbrain_validation_thread(monkeypatch):
+    widget, updates = create_widget(monkeypatch)
+    validation_thread = FakeQThread()
+    validation_worker = FakeWorkerForGui([])
+    widget.speechbrainValidationThread = validation_thread
+    widget.speechbrainValidationWorker = validation_worker
+    event = DummyEvent()
+
+    widget.closeEvent(event)
+
+    assert event.ignored is False
+    assert widget.isClosing is True
+    assert validation_thread.quit_called is True
+    assert validation_thread.waited is True
+    assert widget.speechbrainValidationThread is None
+    assert widget.speechbrainValidationWorker is None
+    assert updates[-1] == {
+        "last_input_path": "",
+        "last_output_path": "",
+        "auto_apply_cleaning_mode": False,
+    }
+
+
+def test_speechbrain_validation_success_is_ignored_while_closing(monkeypatch):
+    widget, _updates = create_widget(monkeypatch)
+    started = []
+    widget.isClosing = True
+    widget.speechbrainValidationThread = FakeQThread()
+    widget.speechbrainValidationWorker = FakeWorkerForGui([])
+    monkeypatch.setattr(widget, "start_script_execution", lambda: started.append(True))
+
+    widget.speechbrain_runtime_validation_finished(True, "")
+
+    assert started == []
+    assert widget.speechbrainValidationThread is None
+    assert widget.speechbrainValidationWorker is None

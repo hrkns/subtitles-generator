@@ -156,6 +156,7 @@ class SubtitlesGeneratorGUI(QWidget):
         self.speechbrainDependencyAvailable = is_speechbrain_dependency_available()
         self.speechbrainValidationWorker = None
         self.speechbrainValidationThread = None
+        self.isClosing = False
         self.autoApplyCleaningModeCheckBox.setChecked(self.appConfig.get("auto_apply_cleaning_mode", False))
         self.cleaningModeComboBox.setCurrentText(self.resolve_initial_cleaning_mode())
         self.saveCleaningModeCheckBox.setChecked(False)
@@ -303,6 +304,9 @@ class SubtitlesGeneratorGUI(QWidget):
         self.speechbrainValidationWorker = None
         self.speechbrainValidationThread = None
 
+        if self.isClosing:
+            return
+
         if not is_ready:
             self.logTextEdit.append(message)
             self.cleaningModeStatusLabel.setText(f"{message}\n" + CLEANING_PERFORMANCE_WARNING)
@@ -339,6 +343,15 @@ class SubtitlesGeneratorGUI(QWidget):
             self.lastOutputPath = os.path.dirname(file_name)
             self.persist_runtime_preferences()
 
+    def stop_speechbrain_runtime_validation(self):
+        if self.speechbrainValidationThread is None:
+            return
+
+        self.speechbrainValidationThread.quit()
+        self.speechbrainValidationThread.wait()
+        self.speechbrainValidationWorker = None
+        self.speechbrainValidationThread = None
+
     def closeEvent(self, event):
         if hasattr(self, 'worker') and self.worker.is_running():
             reply = QMessageBox.question(self, 'Message',
@@ -353,6 +366,8 @@ class SubtitlesGeneratorGUI(QWidget):
                 event.ignore()
                 return
 
+        self.isClosing = True
+        self.stop_speechbrain_runtime_validation()
         self.persist_runtime_preferences()
         super().closeEvent(event)
 
