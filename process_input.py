@@ -315,7 +315,10 @@ def parse_segments(segments_str, total_duration_ms):
         if overlap_segments:
             logging.warning(f"Overlapping segments detected: {overlap_segments}")
 
-    return segments
+    return filter_zero_length_segments(segments)
+
+def filter_zero_length_segments(segments):
+    return [(start, end) for start, end in segments if start < end]
 
 def process_audio_segments(input_audio, segments_to_process, audio_language, speech_to_text_model, output_json_template):
     # This function assumes the existence of a 'whisper' module and 'model' variable.
@@ -472,7 +475,7 @@ def generate_segments_from_checkpoints(checkpoints, total_duration_ms):
     # Add the end of the last segment based on the total audio duration
     segments_to_process.append((checkpoints[-1], total_duration_ms))
 
-    return segments_to_process
+    return filter_zero_length_segments(segments_to_process)
 
 def process_input(args):
     # extract command line args and set defaults
