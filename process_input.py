@@ -38,7 +38,7 @@ SPEECHBRAIN_INSTALL_HINT = (
 
 def validate_audio_file(file_path):
     if not os.path.exists(file_path):
-        logging.error("The provided audio file does not exist.")
+        logging.error(f"The provided audio file does not exist: {file_path}")
         sys.exit(1)
 
     try:
@@ -67,7 +67,7 @@ def is_video_file(file_path):
 
     # First, check if the file exists.
     if not os.path.exists(file_path):
-        print("File does not exist.")
+        print(f"File does not exist: {file_path}")
         return False
 
     # Use python-magic to determine the file's mime type.
