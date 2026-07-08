@@ -513,6 +513,7 @@ def test_load_speechbrain_enhancer_reports_model_load_failure_with_cache_path(tm
         process_input_module.load_speechbrain_enhancer()
 
     assert expected_savedir in str(exc_info.value)
+    assert "download failed" in str(exc_info.value)
     assert os.path.isdir(expected_savedir)
 
 

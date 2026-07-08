@@ -211,7 +211,7 @@ def load_speechbrain_enhancer(strategy_settings=None):
         raise RuntimeError(
             f"SpeechBrain cleaning mode could not load its enhancement model into {savedir}. "
             "Ensure the optional dependencies are installed, network access is available for the first download, "
-            "and the cache directory is writable."
+            f"and the cache directory is writable. Original error: {e}"
         ) from e
 
 def apply_speechbrain_audio_cleaning(input_path, output_path):
