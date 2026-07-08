@@ -501,7 +501,7 @@ def process_input(args):
         try:
             persist_default_cleaning_mode(cleaning_mode, already_resolved=True)
         except Exception as e:
-            logging.error(f"Could not persist cleaning mode '{cleaning_mode}': {str(e)}")
+            logging.exception(f"Could not persist cleaning mode '{cleaning_mode}': {str(e)}")
 
     # Prepare the normalized and optionally cleaned working audio used by transcription.
     transcription_audio_path, input_audio = prepare_transcription_audio(input_path, cleaning_mode)

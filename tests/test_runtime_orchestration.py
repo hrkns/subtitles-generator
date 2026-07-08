@@ -343,6 +343,11 @@ def test_process_input_continues_when_persisting_cleaning_mode_fails(tmp_path, m
         os.path.join(process_input_module.TMP_DIR, "speech_recognition_result_segment_{}.json"),
     )
     assert "Could not persist cleaning mode 'basic': disk full" in caplog.text
+    assert any(
+        record.exc_info and record.exc_info[0] is OSError
+        for record in caplog.records
+        if "Could not persist cleaning mode 'basic'" in record.getMessage()
+    )
 
 
 def test_process_input_uses_explicit_segments(monkeypatch):
