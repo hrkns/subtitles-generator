@@ -64,6 +64,12 @@ def test_generate_segments_from_checkpoints_filters_zero_length_trailing_range()
     ]
 
 
+def test_generate_segments_from_pattern_preserves_subsecond_total_duration():
+    assert generate_segments_from_checkpoints("5m", 120500) == [
+        (0, 120500),
+    ]
+
+
 def test_parse_segments_handles_opening_and_open_ended_ranges():
     assert parse_segments(":00:10,00:10-00:20,00:20", 30000) == [
         (0, 10000),

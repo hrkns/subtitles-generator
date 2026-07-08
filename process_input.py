@@ -460,10 +460,12 @@ def validate_and_order_checkpoints(checkpoints_str, total_audio_duration_ms):
 def generate_segments_from_checkpoints(checkpoints, total_duration_ms):
     segments_to_process = []
 
-    checkpoints = validate_and_order_checkpoints(checkpoints, total_duration_ms)
-
-    # Convert checkpoint times to a list of milliseconds
-    checkpoints = [convert_hhmmss_to_ms(cp) for cp in checkpoints]
+    if is_pattern(checkpoints):
+        checkpoints = [checkpoint_ms for checkpoint_ms, _checkpoint_label in generate_time_checkpoints(checkpoints, total_duration_ms)]
+    else:
+        checkpoints = validate_and_order_checkpoints(checkpoints, total_duration_ms)
+        # Convert checkpoint times to a list of milliseconds
+        checkpoints = [convert_hhmmss_to_ms(cp) for cp in checkpoints]
     
     # Add the start of the first segment (0 ms)
     segments_to_process.append((0, checkpoints[0]))
