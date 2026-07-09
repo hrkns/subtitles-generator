@@ -520,6 +520,38 @@ def test_load_speechbrain_enhancer_reports_model_load_failure_with_cache_path(tm
     assert os.path.isdir(expected_savedir)
 
 
+def test_load_speechbrain_enhancer_reports_cache_directory_failures(tmp_path, monkeypatch):
+    monkeypatch.setattr(process_input_module, "AUDIO_CACHE_DIR", f"{tmp_path}{os.sep}cache{os.sep}")
+
+    class FakeSpectralMaskEnhancement:
+        @staticmethod
+        def from_hparams(source, savedir):
+            raise AssertionError("from_hparams should not run when cache directory creation fails")
+
+    monkeypatch.setattr(
+        process_input_module.importlib,
+        "import_module",
+        lambda module_name: types.SimpleNamespace(SpectralMaskEnhancement=FakeSpectralMaskEnhancement),
+    )
+    monkeypatch.setattr(
+        process_input_module.os,
+        "makedirs",
+        lambda path, exist_ok=True: (_ for _ in ()).throw(PermissionError("read-only filesystem")),
+    )
+
+    expected_savedir = os.path.join(
+        process_input_module.AUDIO_CACHE_DIR,
+        process_input_module.SPEECHBRAIN_MODEL_CACHE_DIRNAME,
+    )
+
+    with pytest.raises(RuntimeError, match="could not prepare its model cache directory") as exc_info:
+        process_input_module.load_speechbrain_enhancer()
+
+    assert expected_savedir in str(exc_info.value)
+    assert "read-only filesystem" in str(exc_info.value)
+    assert isinstance(exc_info.value.__cause__, PermissionError)
+
+
 def test_load_speechbrain_enhancer_uses_saved_model_source(tmp_path, monkeypatch):
     monkeypatch.setattr(process_input_module, "AUDIO_CACHE_DIR", f"{tmp_path}{os.sep}cache{os.sep}")
 

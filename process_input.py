@@ -200,7 +200,14 @@ def load_speechbrain_enhancer(strategy_settings=None):
 
     model_source = strategy_settings.get("model_source") or SPEECHBRAIN_MODEL_SOURCE
     savedir = os.path.join(AUDIO_CACHE_DIR, SPEECHBRAIN_MODEL_CACHE_DIRNAME)
-    os.makedirs(savedir, exist_ok=True)
+
+    try:
+        os.makedirs(savedir, exist_ok=True)
+    except Exception as e:
+        raise RuntimeError(
+            f"SpeechBrain cleaning mode could not prepare its model cache directory at {savedir}. "
+            f"Ensure the cache directory is writable. Original error: {e}"
+        ) from e
 
     try:
         return spectral_mask_enhancement.from_hparams(
