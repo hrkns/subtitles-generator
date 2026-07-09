@@ -67,7 +67,7 @@ def is_video_file(file_path):
 
     # First, check if the file exists.
     if not os.path.exists(file_path):
-        print(f"File does not exist: {file_path}")
+        logging.error(f"File does not exist: {file_path}")
         return False
 
     # Use python-magic to determine the file's mime type.

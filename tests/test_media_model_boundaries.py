@@ -90,11 +90,13 @@ def test_validate_audio_file_rejects_decode_failures(monkeypatch, caplog):
     assert "decode failed" in caplog.text
 
 
-def test_is_video_file_returns_false_when_file_is_missing(monkeypatch, capsys):
+def test_is_video_file_returns_false_when_file_is_missing(monkeypatch, caplog):
     monkeypatch.setattr(process_input_module.os.path, "exists", lambda file_path: False)
 
-    assert process_input_module.is_video_file("missing.mp4") is False
-    assert "File does not exist: missing.mp4" in capsys.readouterr().out
+    with caplog.at_level(logging.ERROR):
+        assert process_input_module.is_video_file("missing.mp4") is False
+
+    assert "File does not exist: missing.mp4" in caplog.text
 
 
 def test_is_video_file_detects_video_mime(monkeypatch):
