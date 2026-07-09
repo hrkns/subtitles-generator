@@ -237,9 +237,7 @@ This means:
 
 ### Near-term quality follow-up
 
-2. Fix the temporary file leak in `process_audio_segments()` on transcription failure.
-
-This is the most concrete quality issue found while reviewing the remaining gaps.
+2. Confirm the temporary segment cleanup on transcription failure remains covered and does not regress.
 
 ### Optional coverage improvements
 
