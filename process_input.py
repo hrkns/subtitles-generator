@@ -8,7 +8,6 @@ import sys
 import magic
 import whisper_timestamped as whisper
 from pydub import AudioSegment, effects as audio_effects
-from pydub.exceptions import CouldntDecodeError
 from config import AUDIO_CACHE_DIR, TMP_DIR
 from modules import convert_hhmmss_to_ms, format_ms_duration, load_cleaning_settings, save_cleaning_settings
 
@@ -44,12 +43,6 @@ def validate_audio_file(file_path):
     try:
         audio = AudioSegment.from_file(file_path)
         return audio
-    except CouldntDecodeError as e:
-        logging.error(
-            f"Could not decode audio file '{file_path}'. Please ensure it's a valid audio file. Error: {e}",
-            exc_info=True,
-        )
-        sys.exit(1)
     except Exception as e:
         logging.error(
             f"Could not decode audio file '{file_path}'. Please ensure it's a valid audio file. Error: {e}",

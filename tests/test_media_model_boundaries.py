@@ -5,6 +5,7 @@ import types
 from pathlib import Path
 
 import pytest
+from pydub.exceptions import CouldntDecodeError
 
 import process_input as process_input_module
 
@@ -78,7 +79,7 @@ def test_validate_audio_file_rejects_decode_failures(monkeypatch, caplog):
     monkeypatch.setattr(process_input_module.os.path, "exists", lambda file_path: True)
 
     def fake_from_mp3(file_path):
-        raise process_input_module.CouldntDecodeError("decode failed")
+        raise CouldntDecodeError("decode failed")
 
     monkeypatch.setattr(process_input_module.AudioSegment, "from_file", fake_from_mp3)
 
