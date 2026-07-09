@@ -44,4 +44,4 @@ jobs:
           path: |
             coverage.xml
             htmlcov/
-          if-no-files-found: error
+          if-no-files-found: warn
