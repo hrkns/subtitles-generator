@@ -118,8 +118,7 @@ The current work is still only local test hardening.
 
 What is still missing here:
 
-- GitHub Actions workflow to run `pytest`
-- required status check / branch gate configuration in GitHub
+- required status check / branch gate configuration in GitHub (the workflow itself is now present in `.github/workflows/tests.yml`)
 
 ## 2. Gaps Still Visible In Coverage
 
