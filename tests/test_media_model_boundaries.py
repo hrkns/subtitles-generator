@@ -176,6 +176,36 @@ def test_load_moviepy_audio_file_clip_falls_back_to_moviepy_editor(monkeypatch, 
     assert import_calls == ["moviepy", "moviepy.editor"]
 
 
+def test_load_moviepy_audio_file_clip_reports_missing_moviepy(monkeypatch):
+    import_calls = []
+
+    def fake_import_module(module_name):
+        import_calls.append(module_name)
+        raise ModuleNotFoundError("No module named 'moviepy'", name="moviepy")
+
+    monkeypatch.setattr(process_input_module.importlib, "import_module", fake_import_module)
+
+    with pytest.raises(RuntimeError, match="Video input support requires MoviePy's AudioFileClip") as exc_info:
+        process_input_module.load_moviepy_audio_file_clip()
+
+    assert process_input_module.MOVIEPY_INSTALL_HINT in str(exc_info.value)
+    assert import_calls == ["moviepy", "moviepy.editor"]
+
+
+def test_extract_audio_reports_missing_moviepy(monkeypatch, caplog):
+    def fake_import_module(module_name):
+        raise ModuleNotFoundError("No module named 'moviepy'", name="moviepy")
+
+    monkeypatch.setattr(process_input_module, "AudioFileClip", None)
+    monkeypatch.setattr(process_input_module.importlib, "import_module", fake_import_module)
+
+    with caplog.at_level(logging.ERROR), pytest.raises(RuntimeError, match="Video input support requires MoviePy"):
+        process_input_module.extract_audio("video.mp4", "audio.wav")
+
+    assert "Could not extract audio from 'video.mp4' to 'audio.wav'" in caplog.text
+    assert "Video input support requires MoviePy" in caplog.text
+
+
 def test_extract_audio_writes_audio_file(monkeypatch, caplog):
     calls = {}
 
@@ -245,6 +275,11 @@ def test_prepare_working_audio_creates_tmp_dir_before_writing_audio(tmp_path, mo
     source_audio = FakeExportableAudio()
     normalized_audio = object()
     monkeypatch.setattr(process_input_module, "is_video_file", lambda input_path: False)
+    monkeypatch.setattr(
+        process_input_module,
+        "load_moviepy_audio_file_clip",
+        lambda: (_ for _ in ()).throw(AssertionError("MoviePy should not be loaded for audio inputs")),
+    )
 
     def fake_validate_audio_file(file_path):
         if file_path == "input.wav":

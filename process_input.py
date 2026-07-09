@@ -12,14 +12,55 @@ from config import AUDIO_CACHE_DIR, TMP_DIR
 from modules import convert_hhmmss_to_ms, format_ms_duration, load_cleaning_settings, save_cleaning_settings
 
 
+MOVIEPY_INSTALL_HINT = (
+    "Install MoviePy by running install_dependencies.cmd on Windows or install_dependencies.sh on Linux/macOS, "
+    "or run `python -m pip install moviepy`."
+)
+
+
+def is_missing_requested_module(error, module_name):
+    missing_name = getattr(error, "name", None)
+    return missing_name == module_name or (
+        missing_name is not None and module_name.startswith(f"{missing_name}.")
+    )
+
+
 def load_moviepy_audio_file_clip():
-    try:
-        return importlib.import_module("moviepy").AudioFileClip
-    except (ImportError, AttributeError):
-        return importlib.import_module("moviepy.editor").AudioFileClip
+    import_attempts = []
+
+    for module_name in ("moviepy", "moviepy.editor"):
+        try:
+            return importlib.import_module(module_name).AudioFileClip
+        except ModuleNotFoundError as e:
+            if is_missing_requested_module(e, module_name):
+                import_attempts.append(f"{module_name}: {e}")
+                continue
+
+            raise RuntimeError(
+                "MoviePy is installed but failed while importing one of its dependencies. "
+                f"Original error: {e}"
+            ) from e
+        except AttributeError as e:
+            import_attempts.append(f"{module_name}: AudioFileClip is unavailable ({e})")
+        except ImportError as e:
+            import_attempts.append(f"{module_name}: {e}")
+
+    raise RuntimeError(
+        "Video input support requires MoviePy's AudioFileClip, but it could not be imported from "
+        f"moviepy or moviepy.editor. {MOVIEPY_INSTALL_HINT} Import attempts: {'; '.join(import_attempts)}"
+    )
 
 
-AudioFileClip = load_moviepy_audio_file_clip()
+AudioFileClip = None
+
+
+def get_moviepy_audio_file_clip():
+    global AudioFileClip
+
+    if AudioFileClip is None:
+        AudioFileClip = load_moviepy_audio_file_clip()
+
+    return AudioFileClip
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -82,7 +123,8 @@ def extract_audio(video_path, audio_path):
     """
     video = None
     try:
-        video = AudioFileClip(video_path)
+        audio_file_clip = get_moviepy_audio_file_clip()
+        video = audio_file_clip(video_path)
         video.write_audiofile(audio_path)
         logging.info(f"Audio extracted and saved to {audio_path}")
     except Exception as e:
