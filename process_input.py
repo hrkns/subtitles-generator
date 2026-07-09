@@ -99,6 +99,7 @@ def normalize_audio_file(input_audio, output_path, output_format=WORKING_AUDIO_F
     return output_path
 
 def prepare_working_audio(input_path):
+    os.makedirs(TMP_DIR, exist_ok=True)
     working_audio_path = os.path.join(TMP_DIR, WORKING_AUDIO_FILENAME)
 
     if is_video_file(input_path):

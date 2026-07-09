@@ -227,6 +227,31 @@ def test_prepare_working_audio_normalizes_audio_input_to_wav(tmp_path, monkeypat
     assert source_audio.export_calls == [(working_audio_path, process_input_module.WORKING_AUDIO_FORMAT)]
 
 
+def test_prepare_working_audio_creates_tmp_dir_before_writing_audio(tmp_path, monkeypatch):
+    tmp_dir = tmp_path / "missing" / "tmp"
+    monkeypatch.setattr(process_input_module, "TMP_DIR", f"{tmp_dir}{os.sep}")
+
+    source_audio = FakeExportableAudio()
+    normalized_audio = object()
+    monkeypatch.setattr(process_input_module, "is_video_file", lambda input_path: False)
+
+    def fake_validate_audio_file(file_path):
+        if file_path == "input.wav":
+            return source_audio
+        if file_path == os.path.join(process_input_module.TMP_DIR, process_input_module.WORKING_AUDIO_FILENAME):
+            return normalized_audio
+        raise AssertionError(f"Unexpected validation path: {file_path}")
+
+    monkeypatch.setattr(process_input_module, "validate_audio_file", fake_validate_audio_file)
+
+    working_audio_path, working_audio = process_input_module.prepare_working_audio("input.wav")
+
+    assert tmp_dir.is_dir()
+    assert working_audio_path == os.path.join(process_input_module.TMP_DIR, process_input_module.WORKING_AUDIO_FILENAME)
+    assert working_audio is normalized_audio
+    assert source_audio.export_calls == [(working_audio_path, process_input_module.WORKING_AUDIO_FORMAT)]
+
+
 def test_prepare_working_audio_extracts_video_to_wav(tmp_path, monkeypatch):
     monkeypatch.setattr(process_input_module, "TMP_DIR", f"{tmp_path}{os.sep}")
 
