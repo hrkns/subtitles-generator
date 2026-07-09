@@ -11,6 +11,7 @@ from modules import load_app_config, update_app_config
 
 SUPPORTED_CLEANING_MODES = ("off", "basic", "speechbrain")
 DEFAULT_CLEANING_MODE = "off"
+SPEECHBRAIN_VALIDATION_SHUTDOWN_TIMEOUT_MS = 1000
 CLEANING_PERFORMANCE_WARNING = (
     "Audio cleanup performance is still unstable and may vary depending on the platform where it is executed."
 )
@@ -347,8 +348,19 @@ class SubtitlesGeneratorGUI(QWidget):
         if self.speechbrainValidationThread is None:
             return
 
+        if hasattr(self.speechbrainValidationThread, "requestInterruption"):
+            self.speechbrainValidationThread.requestInterruption()
         self.speechbrainValidationThread.quit()
-        self.speechbrainValidationThread.wait()
+        stopped = self.speechbrainValidationThread.wait(SPEECHBRAIN_VALIDATION_SHUTDOWN_TIMEOUT_MS)
+        if stopped is False:
+            logging.warning(
+                "SpeechBrain runtime validation did not stop within "
+                f"{SPEECHBRAIN_VALIDATION_SHUTDOWN_TIMEOUT_MS}ms; terminating validation thread."
+            )
+            if hasattr(self.speechbrainValidationThread, "terminate"):
+                self.speechbrainValidationThread.terminate()
+                self.speechbrainValidationThread.wait(SPEECHBRAIN_VALIDATION_SHUTDOWN_TIMEOUT_MS)
+
         self.speechbrainValidationWorker = None
         self.speechbrainValidationThread = None
 

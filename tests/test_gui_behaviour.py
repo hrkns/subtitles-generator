@@ -70,23 +70,37 @@ class FakeSignal:
 
 
 class FakeQThread:
-    def __init__(self, *_args, **_kwargs):
+    def __init__(self, *_args, wait_results=None, **_kwargs):
         self.started = FakeSignal()
         self.finished = FakeSignal()
         self.started_called = False
         self.quit_called = False
         self.waited = False
+        self.wait_timeouts = []
+        self.wait_results = list(wait_results) if wait_results is not None else [True]
+        self.request_interruption_called = False
+        self.terminate_called = False
         self.deleted = False
 
     def start(self):
         self.started_called = True
 
+    def requestInterruption(self):
+        self.request_interruption_called = True
+
     def quit(self):
         self.quit_called = True
         self.finished.emit()
 
-    def wait(self):
+    def wait(self, timeout=None):
         self.waited = True
+        self.wait_timeouts.append(timeout)
+        if self.wait_results:
+            return self.wait_results.pop(0)
+        return True
+
+    def terminate(self):
+        self.terminate_called = True
 
     def deleteLater(self):
         self.deleted = True
@@ -639,8 +653,11 @@ def test_close_event_waits_for_running_speechbrain_validation_thread(monkeypatch
 
     assert event.ignored is False
     assert widget.isClosing is True
+    assert validation_thread.request_interruption_called is True
     assert validation_thread.quit_called is True
     assert validation_thread.waited is True
+    assert validation_thread.wait_timeouts == [gui.SPEECHBRAIN_VALIDATION_SHUTDOWN_TIMEOUT_MS]
+    assert validation_thread.terminate_called is False
     assert widget.speechbrainValidationThread is None
     assert widget.speechbrainValidationWorker is None
     assert updates[-1] == {
@@ -648,6 +665,28 @@ def test_close_event_waits_for_running_speechbrain_validation_thread(monkeypatch
         "last_output_path": "",
         "auto_apply_cleaning_mode": False,
     }
+
+
+def test_close_event_terminates_stalled_speechbrain_validation_thread(monkeypatch, caplog):
+    widget, _updates = create_widget(monkeypatch)
+    validation_thread = FakeQThread(wait_results=[False, True])
+    widget.speechbrainValidationThread = validation_thread
+    widget.speechbrainValidationWorker = FakeWorkerForGui([])
+    event = DummyEvent()
+
+    with caplog.at_level(logging.WARNING):
+        widget.closeEvent(event)
+
+    assert validation_thread.request_interruption_called is True
+    assert validation_thread.quit_called is True
+    assert validation_thread.terminate_called is True
+    assert validation_thread.wait_timeouts == [
+        gui.SPEECHBRAIN_VALIDATION_SHUTDOWN_TIMEOUT_MS,
+        gui.SPEECHBRAIN_VALIDATION_SHUTDOWN_TIMEOUT_MS,
+    ]
+    assert "terminating validation thread" in caplog.text
+    assert widget.speechbrainValidationThread is None
+    assert widget.speechbrainValidationWorker is None
 
 
 def test_speechbrain_validation_success_is_ignored_while_closing(monkeypatch):

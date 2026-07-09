@@ -137,16 +137,25 @@ def _install_stub_modules():
                 self.started_called = False
                 self.quit_called = False
                 self.waited = False
+                self.request_interruption_called = False
+                self.terminate_called = False
 
             def start(self):
                 self.started_called = True
+
+            def requestInterruption(self):
+                self.request_interruption_called = True
 
             def quit(self):
                 self.quit_called = True
                 self.finished.emit()
 
-            def wait(self):
+            def wait(self, _timeout=None):
                 self.waited = True
+                return True
+
+            def terminate(self):
+                self.terminate_called = True
 
         class QWidget:
             def __init__(self, *_args, **_kwargs):
