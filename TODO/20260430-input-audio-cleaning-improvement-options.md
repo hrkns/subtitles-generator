@@ -20,7 +20,7 @@ The current heavy backend is implemented through SpeechBrain's `SpectralMaskEnha
 
 Important implementation facts:
 
-- the model source is currently hard-coded in `process_input.py`
+- the model source defaults to `speechbrain/metricgan-plus-voicebank` but can be overridden via `speechbrain_strategy_settings.model_source`
 - the app config structure already contains `speechbrain_strategy_settings.model_source`
 - the GUI currently checks SpeechBrain availability in-process through Python imports and validates runtime readiness by calling the backend loader directly
 - unavailable heavy backends must fail explicitly instead of silently falling back to `basic` or `off`
