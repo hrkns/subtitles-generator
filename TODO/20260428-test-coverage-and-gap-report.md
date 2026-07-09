@@ -231,9 +231,7 @@ These are lower priority than the current core regression surface.
 
 This means:
 
-- create the CI workflow artifacts
-- run `pytest` in CI
-- make that check the branch gate outside the repository settings once the workflow exists
+- configure the repository branch protection rules to require the `Pytest` check (the workflow is already defined in `.github/workflows/tests.yml`)
 
 ### Near-term quality follow-up
 
