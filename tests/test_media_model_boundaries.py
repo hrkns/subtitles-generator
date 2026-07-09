@@ -29,6 +29,17 @@ class FakeInputAudio:
         return FakeAudioSegmentSlice(self.exported_paths)
 
 
+class FailingExportAudioSegmentSlice:
+    def export(self, file_path, format="wav"):
+        Path(file_path).write_text("partial audio", encoding="utf-8")
+        raise OSError("export failed")
+
+
+class FailingExportInputAudio:
+    def __getitem__(self, item):
+        return FailingExportAudioSegmentSlice()
+
+
 class FakeExportableAudio:
     def __init__(self):
         self.export_calls = []
@@ -780,3 +791,19 @@ def test_process_audio_segments_wraps_transcription_failures(tmp_path, monkeypat
     assert str(exc_info.value.__cause__) == "transcription failed"
     assert not (tmp_path / "result_000000_000002.json").exists()
     assert not (tmp_path / "temp_segment_1.wav").exists()
+
+
+def test_process_audio_segments_cleans_partial_temp_file_when_export_fails(tmp_path, monkeypatch):
+    monkeypatch.setattr(process_input_module, "TMP_DIR", f"{tmp_path}{os.sep}")
+
+    with pytest.raises(OSError, match="export failed"):
+        process_input_module.process_audio_segments(
+            FailingExportInputAudio(),
+            [(0, 2000)],
+            "en",
+            "fake-model",
+            f"{tmp_path}{os.sep}result_{{}}.json",
+        )
+
+    assert not (tmp_path / "temp_segment_1.wav").exists()
+    assert not (tmp_path / "result_000000_000002.json").exists()

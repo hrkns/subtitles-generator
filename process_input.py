@@ -342,10 +342,11 @@ def process_audio_segments(input_audio, segments_to_process, audio_language, spe
         logging.info("Creating tmp audio segment...")
         output_format = WORKING_AUDIO_FORMAT
         temp_audio_file = os.path.join(TMP_DIR, f"temp_segment_{segment_number}.{output_format}")
-        audio_segment.export(temp_audio_file, format=output_format)
-        logging.info("Created temporary audio segment.")
 
         try:
+            audio_segment.export(temp_audio_file, format=output_format)
+            logging.info("Created temporary audio segment.")
+
             # Transcribe the audio segment
             logging.info("Transforming speech segment to text...")
             segment_audio = whisper.load_audio(temp_audio_file)
