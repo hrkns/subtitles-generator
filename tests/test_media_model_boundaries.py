@@ -607,6 +607,20 @@ def test_apply_audio_cleaning_speechbrain_enhances_working_audio(tmp_path, monke
     assert Path(expected_output_path).exists()
 
 
+def test_apply_speechbrain_audio_cleaning_reports_enhancement_failure(monkeypatch):
+    class FakeEnhancer:
+        def enhance_file(self, input_path, output_path):
+            raise RuntimeError("CUDA device unavailable")
+
+    monkeypatch.setattr(process_input_module, "load_speechbrain_enhancer", lambda: FakeEnhancer())
+
+    with pytest.raises(RuntimeError, match="CUDA device unavailable") as exc_info:
+        process_input_module.apply_speechbrain_audio_cleaning("working.wav", "cleaned.wav")
+
+    assert "failed while enhancing the working audio" in str(exc_info.value)
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
+
+
 def test_prepare_transcription_audio_applies_cleaning_after_working_audio_creation(monkeypatch):
     calls = {}
     working_audio = object()

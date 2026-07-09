@@ -221,7 +221,7 @@ def apply_speechbrain_audio_cleaning(input_path, output_path):
     try:
         enhancer.enhance_file(input_path, output_path)
     except Exception as e:
-        raise RuntimeError("SpeechBrain cleaning mode failed while enhancing the working audio.") from e
+        raise RuntimeError(f"SpeechBrain cleaning mode failed while enhancing the working audio. Original error: {e}") from e
 
     if not os.path.exists(output_path):
         raise RuntimeError("SpeechBrain cleaning mode did not produce an enhanced audio file.")
