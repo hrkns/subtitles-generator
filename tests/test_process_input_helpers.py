@@ -36,6 +36,10 @@ def test_generate_time_checkpoints_uses_total_duration_when_shorter_than_interva
     assert generate_time_checkpoints("5m", 120000) == [(120000, "0:02:00")]
 
 
+def test_generate_time_checkpoints_preserves_subsecond_fallback_label():
+    assert generate_time_checkpoints("5m", 120500) == [(120500, "0:02:00.500000")]
+
+
 def test_validate_and_order_checkpoints_sorts_values():
     assert validate_and_order_checkpoints("00:10,00:05", 20000) == ["00:05", "00:10"]
 

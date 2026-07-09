@@ -132,11 +132,14 @@ def resolve_cleaning_mode(cleaning_mode=None):
     if resolved_mode is None:
         resolved_mode = get_saved_cleaning_mode() or DEFAULT_CLEANING_MODE
 
-    if resolved_mode not in SUPPORTED_CLEANING_MODES:
-        supported_modes = ", ".join(SUPPORTED_CLEANING_MODES)
-        raise ValueError(f"Unsupported cleaning mode '{resolved_mode}'. Supported values are: {supported_modes}.")
+    return validate_cleaning_mode(resolved_mode)
 
-    return resolved_mode
+def validate_cleaning_mode(cleaning_mode):
+    if cleaning_mode not in SUPPORTED_CLEANING_MODES:
+        supported_modes = ", ".join(SUPPORTED_CLEANING_MODES)
+        raise ValueError(f"Unsupported cleaning mode '{cleaning_mode}'. Supported values are: {supported_modes}.")
+
+    return cleaning_mode
 
 def persist_default_cleaning_mode(cleaning_mode, already_resolved=False):
     resolved_mode = cleaning_mode if already_resolved else resolve_cleaning_mode(cleaning_mode)
@@ -230,8 +233,8 @@ def apply_speechbrain_audio_cleaning(input_path, output_path):
     logging.info(f"SpeechBrain cleaned audio saved to {output_path}")
     return output_path
 
-def apply_audio_cleaning(working_audio_path, cleaning_mode=None, working_audio=None):
-    resolved_mode = resolve_cleaning_mode(cleaning_mode)
+def apply_audio_cleaning(working_audio_path, cleaning_mode=None, working_audio=None, already_resolved=False):
+    resolved_mode = validate_cleaning_mode(cleaning_mode) if already_resolved else resolve_cleaning_mode(cleaning_mode)
 
     if resolved_mode == DEFAULT_CLEANING_MODE:
         logging.info("Audio cleaning mode set to off. Using normalized working audio.")
@@ -251,9 +254,9 @@ def apply_audio_cleaning(working_audio_path, cleaning_mode=None, working_audio=N
 
     return cleaned_audio_path, validate_audio_file(cleaned_audio_path)
 
-def prepare_transcription_audio(input_path, cleaning_mode=None):
+def prepare_transcription_audio(input_path, cleaning_mode=None, already_resolved=False):
     working_audio_path, working_audio = prepare_working_audio(input_path)
-    return apply_audio_cleaning(working_audio_path, cleaning_mode, working_audio)
+    return apply_audio_cleaning(working_audio_path, cleaning_mode, working_audio, already_resolved=already_resolved)
 
 def parse_segments(segments_str, total_duration_ms):
     segments = []
@@ -411,7 +414,7 @@ def generate_time_checkpoints(pattern, total_milliseconds):
         current_seconds += interval_seconds
 
     if len(checkpoints) == 0:
-        checkpoints.append((total_milliseconds, str(datetime.timedelta(seconds=total_seconds))))
+        checkpoints.append((total_milliseconds, str(datetime.timedelta(milliseconds=total_milliseconds))))
 
     return checkpoints
 
@@ -508,7 +511,7 @@ def process_input(args):
             logging.exception(f"Could not persist cleaning mode '{cleaning_mode}': {str(e)}")
 
     # Prepare the normalized and optionally cleaned working audio used by transcription.
-    transcription_audio_path, input_audio = prepare_transcription_audio(input_path, cleaning_mode)
+    transcription_audio_path, input_audio = prepare_transcription_audio(input_path, cleaning_mode, already_resolved=True)
     logging.info(f"Prepared transcription audio at {transcription_audio_path} using cleaning mode '{cleaning_mode}'.")
 
     # Get the total duration of the audio in milliseconds

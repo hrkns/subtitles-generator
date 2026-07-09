@@ -105,8 +105,8 @@ def test_process_input_uses_checkpoint_flow_for_audio_input(tmp_path, monkeypatc
             output_json_template,
         )
 
-    def fake_prepare_transcription_audio(input_path, cleaning_mode):
-        calls["prepare_transcription_audio"] = (input_path, cleaning_mode)
+    def fake_prepare_transcription_audio(input_path, cleaning_mode, already_resolved=False):
+        calls["prepare_transcription_audio"] = (input_path, cleaning_mode, already_resolved)
         return (os.path.join(process_input_module.TMP_DIR, process_input_module.WORKING_AUDIO_FILENAME), fake_audio)
 
     monkeypatch.setattr(process_input_module, "prepare_transcription_audio", fake_prepare_transcription_audio)
@@ -120,7 +120,7 @@ def test_process_input_uses_checkpoint_flow_for_audio_input(tmp_path, monkeypatc
     process_input_module.process_input(args)
 
     assert tmp_dir.exists()
-    assert calls["prepare_transcription_audio"] == ("input.mp3", "basic")
+    assert calls["prepare_transcription_audio"] == ("input.mp3", "basic", True)
     assert calls["generate_segments"] == ("30s", 65000)
     assert calls["load_model"] == "tiny"
     assert calls["process_audio_segments"] == (
@@ -154,8 +154,8 @@ def test_process_input_uses_video_extraction_and_default_full_range(tmp_path, mo
             output_json_template,
         )
 
-    def fake_prepare_transcription_audio(input_path, cleaning_mode):
-        calls["prepare_transcription_audio"] = (input_path, cleaning_mode)
+    def fake_prepare_transcription_audio(input_path, cleaning_mode, already_resolved=False):
+        calls["prepare_transcription_audio"] = (input_path, cleaning_mode, already_resolved)
         return (os.path.join(process_input_module.TMP_DIR, process_input_module.WORKING_AUDIO_FILENAME), fake_audio)
 
     monkeypatch.setattr(process_input_module, "prepare_transcription_audio", fake_prepare_transcription_audio)
@@ -168,7 +168,7 @@ def test_process_input_uses_video_extraction_and_default_full_range(tmp_path, mo
 
     process_input_module.process_input(args)
 
-    assert calls["prepare_transcription_audio"] == ("input.mp4", "off")
+    assert calls["prepare_transcription_audio"] == ("input.mp4", "off", True)
     assert calls["process_audio_segments"] == (
         fake_audio,
         [(0, 42000)],
@@ -194,8 +194,8 @@ def test_process_input_uses_saved_cleaning_mode_when_no_explicit_selection(tmp_p
         },
     )
 
-    def fake_prepare_transcription_audio(input_path, cleaning_mode):
-        calls["prepare_transcription_audio"] = (input_path, cleaning_mode)
+    def fake_prepare_transcription_audio(input_path, cleaning_mode, already_resolved=False):
+        calls["prepare_transcription_audio"] = (input_path, cleaning_mode, already_resolved)
         return (os.path.join(process_input_module.TMP_DIR, process_input_module.WORKING_AUDIO_FILENAME), fake_audio)
 
     def fake_process_audio_segments(input_audio, segments_to_process, audio_language, speech_to_text_model, output_json_template):
@@ -222,7 +222,7 @@ def test_process_input_uses_saved_cleaning_mode_when_no_explicit_selection(tmp_p
 
     process_input_module.process_input(args)
 
-    assert calls["prepare_transcription_audio"] == ("input.mp3", "basic")
+    assert calls["prepare_transcription_audio"] == ("input.mp3", "basic", True)
     assert calls["process_audio_segments"] == (
         fake_audio,
         [(0, 42000)],
@@ -247,8 +247,8 @@ def test_process_input_resolves_cleaning_mode_once_and_reuses_it_for_persistence
     def fake_save_cleaning_settings(default_cleaning_mode, preselect_saved_cleaning_mode=True):
         calls["save_cleaning_settings"] = (default_cleaning_mode, preselect_saved_cleaning_mode)
 
-    def fake_prepare_transcription_audio(input_path, cleaning_mode):
-        calls["prepare_transcription_audio"] = (input_path, cleaning_mode)
+    def fake_prepare_transcription_audio(input_path, cleaning_mode, already_resolved=False):
+        calls["prepare_transcription_audio"] = (input_path, cleaning_mode, already_resolved)
         return (os.path.join(process_input_module.TMP_DIR, process_input_module.WORKING_AUDIO_FILENAME), fake_audio)
 
     def fake_process_audio_segments(input_audio, segments_to_process, audio_language, speech_to_text_model, output_json_template):
@@ -287,7 +287,7 @@ def test_process_input_resolves_cleaning_mode_once_and_reuses_it_for_persistence
 
     assert calls["resolve_cleaning_mode"] == 1
     assert calls["save_cleaning_settings"] == ("basic", False)
-    assert calls["prepare_transcription_audio"] == ("input.mp3", "basic")
+    assert calls["prepare_transcription_audio"] == ("input.mp3", "basic", True)
     assert calls["process_audio_segments"] == (
         fake_audio,
         [(0, 42000)],
@@ -304,8 +304,8 @@ def test_process_input_continues_when_persisting_cleaning_mode_fails(tmp_path, m
     calls = {}
     fake_audio = FakeAudio(42000)
 
-    def fake_prepare_transcription_audio(input_path, cleaning_mode):
-        calls["prepare_transcription_audio"] = (input_path, cleaning_mode)
+    def fake_prepare_transcription_audio(input_path, cleaning_mode, already_resolved=False):
+        calls["prepare_transcription_audio"] = (input_path, cleaning_mode, already_resolved)
         return (os.path.join(process_input_module.TMP_DIR, process_input_module.WORKING_AUDIO_FILENAME), fake_audio)
 
     def fake_process_audio_segments(input_audio, segments_to_process, audio_language, speech_to_text_model, output_json_template):
@@ -334,7 +334,7 @@ def test_process_input_continues_when_persisting_cleaning_mode_fails(tmp_path, m
     with caplog.at_level(logging.ERROR):
         process_input_module.process_input(args)
 
-    assert calls["prepare_transcription_audio"] == ("input.mp3", "basic")
+    assert calls["prepare_transcription_audio"] == ("input.mp3", "basic", True)
     assert calls["process_audio_segments"] == (
         fake_audio,
         [(0, 42000)],
@@ -355,8 +355,8 @@ def test_process_input_uses_explicit_segments(monkeypatch):
     fake_audio = FakeAudio(99000)
     expected_segments = [(1000, 5000)]
 
-    def fake_prepare_transcription_audio(input_path, cleaning_mode):
-        calls["prepare_transcription_audio"] = (input_path, cleaning_mode)
+    def fake_prepare_transcription_audio(input_path, cleaning_mode, already_resolved=False):
+        calls["prepare_transcription_audio"] = (input_path, cleaning_mode, already_resolved)
         return (os.path.join(process_input_module.TMP_DIR, process_input_module.WORKING_AUDIO_FILENAME), fake_audio)
 
     monkeypatch.setattr(process_input_module, "prepare_transcription_audio", fake_prepare_transcription_audio)
@@ -381,7 +381,7 @@ def test_process_input_uses_explicit_segments(monkeypatch):
 
     process_input_module.process_input(args)
 
-    assert calls["prepare_transcription_audio"] == ("input.mp3", "off")
+    assert calls["prepare_transcription_audio"] == ("input.mp3", "off", True)
     assert calls["parse_segments"] == ("00:01-00:05", 99000)
     assert calls["process_audio_segments"] == (expected_segments, "en")
 

@@ -699,8 +699,8 @@ def test_prepare_transcription_audio_applies_cleaning_after_working_audio_creati
         calls["prepare_working_audio"] = input_path
         return "working.wav", working_audio
 
-    def fake_apply_audio_cleaning(working_audio_path, cleaning_mode=None, received_audio=None):
-        calls["apply_audio_cleaning"] = (working_audio_path, cleaning_mode, received_audio)
+    def fake_apply_audio_cleaning(working_audio_path, cleaning_mode=None, received_audio=None, already_resolved=False):
+        calls["apply_audio_cleaning"] = (working_audio_path, cleaning_mode, received_audio, already_resolved)
         return "cleaned.wav", cleaned_audio
 
     monkeypatch.setattr(process_input_module, "prepare_working_audio", fake_prepare_working_audio)
@@ -712,8 +712,37 @@ def test_prepare_transcription_audio_applies_cleaning_after_working_audio_creati
     assert prepared_audio is cleaned_audio
     assert calls == {
         "prepare_working_audio": "input.wav",
-        "apply_audio_cleaning": ("working.wav", "basic", working_audio),
+        "apply_audio_cleaning": ("working.wav", "basic", working_audio, False),
     }
+
+
+def test_apply_audio_cleaning_uses_already_resolved_mode_without_resolving(monkeypatch):
+    working_audio = object()
+
+    def fail_resolve_cleaning_mode(*_args, **_kwargs):
+        raise AssertionError("already resolved cleaning mode should not be resolved again")
+
+    monkeypatch.setattr(process_input_module, "resolve_cleaning_mode", fail_resolve_cleaning_mode)
+
+    cleaned_audio_path, cleaned_audio = process_input_module.apply_audio_cleaning(
+        "working.wav",
+        "off",
+        working_audio,
+        already_resolved=True,
+    )
+
+    assert cleaned_audio_path == "working.wav"
+    assert cleaned_audio is working_audio
+
+
+def test_apply_audio_cleaning_validates_already_resolved_mode():
+    with pytest.raises(ValueError, match="Unsupported cleaning mode 'unknown'"):
+        process_input_module.apply_audio_cleaning(
+            "working.wav",
+            "unknown",
+            object(),
+            already_resolved=True,
+        )
 
 
 def test_process_audio_segments_exports_transcribes_and_writes_json(tmp_path, monkeypatch):
