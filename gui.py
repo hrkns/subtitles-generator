@@ -15,14 +15,35 @@ SPEECHBRAIN_VALIDATION_SHUTDOWN_TIMEOUT_MS = 1000
 CLEANING_PERFORMANCE_WARNING = (
     "Audio cleanup performance is still unstable and may vary depending on the platform where it is executed."
 )
+SPEECHBRAIN_ENHANCEMENT_MODULE = "speechbrain.inference.enhancement"
+
+
+def is_missing_requested_module(error, requested_module):
+    missing_name = getattr(error, "name", None)
+    if missing_name is not None:
+        return missing_name == requested_module or requested_module.startswith(f"{missing_name}.")
+
+    message = str(error)
+    module_parts = requested_module.split(".")
+    requested_module_names = [".".join(module_parts[:index]) for index in range(1, len(module_parts) + 1)]
+    return any(
+        f"No module named '{module_name}'" in message or f'No module named "{module_name}"' in message
+        for module_name in requested_module_names
+    )
 
 
 def is_speechbrain_dependency_available():
     try:
-        importlib.import_module("speechbrain.inference.enhancement")
+        importlib.import_module(SPEECHBRAIN_ENHANCEMENT_MODULE)
         return True
-    except ModuleNotFoundError:
-        return False
+    except ModuleNotFoundError as e:
+        if is_missing_requested_module(e, SPEECHBRAIN_ENHANCEMENT_MODULE):
+            return False
+
+        logging.warning(
+            f"SpeechBrain dependencies are installed but a subdependency failed during import; runtime validation will report details. Error: {e}"
+        )
+        return True
     except Exception as e:
         logging.warning(
             f"SpeechBrain dependencies are installed but failed during import; runtime validation will report details. Error: {e}"
