@@ -46,6 +46,7 @@ class FakeProcess:
         self.stdout = FakeStdout(lines or [])
         self.return_code = return_code
         self.terminated = False
+        self.killed = False
 
     def wait(self):
         return self.return_code
@@ -54,6 +55,10 @@ class FakeProcess:
         return None if not self.terminated else self.return_code
 
     def terminate(self):
+        self.terminated = True
+
+    def kill(self):
+        self.killed = True
         self.terminated = True
 
 
@@ -112,6 +117,7 @@ class FakeWorkerForGui:
         self.output = FakeSignal()
         self.finished = FakeSignal()
         self.stopped = False
+        self.killed = False
         self.thread = None
         self.deleted = False
 
@@ -126,6 +132,9 @@ class FakeWorkerForGui:
 
     def stop(self):
         self.stopped = True
+
+    def kill(self):
+        self.killed = True
 
     def is_running(self):
         return False
@@ -230,6 +239,16 @@ def test_worker_stop_terminates_running_process():
     worker.stop()
 
     assert fake_process.terminated is True
+
+
+def test_worker_kill_kills_running_process():
+    worker = gui.Worker(["python", "main.py"])
+    fake_process = FakeProcess()
+    worker.process = fake_process
+
+    worker.kill()
+
+    assert fake_process.killed is True
 
 
 def test_select_file_updates_selected_input_and_config(monkeypatch):
@@ -647,13 +666,65 @@ def test_close_event_stops_running_process_and_persists_preferences(monkeypatch)
 
     assert event.ignored is False
     assert worker.stopped is True
+    assert worker.killed is False
     assert thread.quit_called is True
     assert thread.waited is True
+    assert thread.wait_timeouts == [gui.SCRIPT_WORKER_SHUTDOWN_TIMEOUT_MS]
     assert updates[-1] == {
         "last_input_path": "",
         "last_output_path": "",
         "auto_apply_cleaning_mode": True,
     }
+
+
+def test_close_event_kills_worker_when_graceful_shutdown_times_out(monkeypatch, caplog):
+    widget, _updates = create_widget(monkeypatch)
+    worker = FakeWorkerForGui([])
+    worker.is_running = lambda: True
+    thread = FakeQThread(wait_results=[False, True])
+    widget.worker = worker
+    widget.thread = thread
+    event = DummyEvent()
+
+    monkeypatch.setattr(gui.QMessageBox, "question", lambda *args, **kwargs: gui.QMessageBox.Yes)
+
+    with caplog.at_level(logging.WARNING):
+        widget.closeEvent(event)
+
+    assert event.ignored is False
+    assert worker.stopped is True
+    assert worker.killed is True
+    assert thread.terminate_called is False
+    assert thread.wait_timeouts == [
+        gui.SCRIPT_WORKER_SHUTDOWN_TIMEOUT_MS,
+        gui.SCRIPT_WORKER_SHUTDOWN_TIMEOUT_MS,
+    ]
+    assert "forcing worker shutdown" in caplog.text
+
+
+def test_close_event_terminates_thread_when_worker_kill_does_not_finish_shutdown(monkeypatch, caplog):
+    widget, _updates = create_widget(monkeypatch)
+    worker = FakeWorkerForGui([])
+    worker.is_running = lambda: True
+    thread = FakeQThread(wait_results=[False, False, True])
+    widget.worker = worker
+    widget.thread = thread
+    event = DummyEvent()
+
+    monkeypatch.setattr(gui.QMessageBox, "question", lambda *args, **kwargs: gui.QMessageBox.Yes)
+
+    with caplog.at_level(logging.WARNING):
+        widget.closeEvent(event)
+
+    assert worker.stopped is True
+    assert worker.killed is True
+    assert thread.terminate_called is True
+    assert thread.wait_timeouts == [
+        gui.SCRIPT_WORKER_SHUTDOWN_TIMEOUT_MS,
+        gui.SCRIPT_WORKER_SHUTDOWN_TIMEOUT_MS,
+        gui.SCRIPT_WORKER_SHUTDOWN_TIMEOUT_MS,
+    ]
+    assert "forcing worker shutdown" in caplog.text
 
 
 def test_close_event_waits_for_running_speechbrain_validation_thread(monkeypatch):

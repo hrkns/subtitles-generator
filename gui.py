@@ -11,6 +11,7 @@ from modules import load_app_config, update_app_config
 
 SUPPORTED_CLEANING_MODES = ("off", "basic", "speechbrain")
 DEFAULT_CLEANING_MODE = "off"
+SCRIPT_WORKER_SHUTDOWN_TIMEOUT_MS = 1000
 SPEECHBRAIN_VALIDATION_SHUTDOWN_TIMEOUT_MS = 1000
 CLEANING_PERFORMANCE_WARNING = (
     "Audio cleanup performance is still unstable and may vary depending on the platform where it is executed."
@@ -108,6 +109,10 @@ class Worker(QObject):
         # Terminate the subprocess if it is running
         if self.process is not None and self.process.poll() is None:
             self.process.terminate()
+
+    def kill(self):
+        if self.process is not None and self.process.poll() is None:
+            self.process.kill()
 
 class SubtitlesGeneratorGUI(QWidget):
     def __init__(self):
@@ -394,7 +399,18 @@ class SubtitlesGeneratorGUI(QWidget):
             if reply == QMessageBox.Yes:
                 self.worker.stop()
                 self.thread.quit()
-                self.thread.wait()
+                stopped = self.thread.wait(SCRIPT_WORKER_SHUTDOWN_TIMEOUT_MS)
+                if stopped is False:
+                    logging.warning(
+                        "Subtitle generation worker did not stop within "
+                        f"{SCRIPT_WORKER_SHUTDOWN_TIMEOUT_MS}ms; forcing worker shutdown."
+                    )
+                    if hasattr(self.worker, "kill"):
+                        self.worker.kill()
+                        stopped = self.thread.wait(SCRIPT_WORKER_SHUTDOWN_TIMEOUT_MS)
+                    if stopped is False and hasattr(self.thread, "terminate"):
+                        self.thread.terminate()
+                        self.thread.wait(SCRIPT_WORKER_SHUTDOWN_TIMEOUT_MS)
             else:
                 event.ignore()
                 return
