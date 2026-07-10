@@ -62,6 +62,13 @@ def get_moviepy_audio_file_clip():
 
     return AudioFileClip
 
+def format_missing_module_error(error):
+    missing_name = getattr(error, "name", None)
+    if missing_name:
+        return f"Missing module: {missing_name}. Original error: {error}"
+
+    return f"Original error: {error}"
+
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 
@@ -227,6 +234,8 @@ def load_speechbrain_enhancer(strategy_settings=None):
         raise RuntimeError(
             "SpeechBrain cleaning mode requires the optional speechbrain enhancement dependencies to be installed. "
             + SPEECHBRAIN_INSTALL_HINT
+            + " "
+            + format_missing_module_error(e)
         ) from e
     except Exception as e:
         raise RuntimeError(

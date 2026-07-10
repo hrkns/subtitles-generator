@@ -545,12 +545,28 @@ def test_apply_audio_cleaning_basic_uses_saved_strategy_settings(tmp_path, monke
 
 def test_load_speechbrain_enhancer_reports_missing_dependency(monkeypatch):
     def fake_import_module(module_name):
-        raise ModuleNotFoundError(module_name)
+        raise ModuleNotFoundError("No module named 'speechbrain'", name="speechbrain")
 
     monkeypatch.setattr(process_input_module.importlib, "import_module", fake_import_module)
 
-    with pytest.raises(RuntimeError, match="install_speechbrain_dependencies"):
+    with pytest.raises(RuntimeError, match="install_speechbrain_dependencies") as exc_info:
         process_input_module.load_speechbrain_enhancer()
+
+    assert "Missing module: speechbrain" in str(exc_info.value)
+    assert "No module named 'speechbrain'" in str(exc_info.value)
+
+
+def test_load_speechbrain_enhancer_reports_missing_subdependency(monkeypatch):
+    def fake_import_module(module_name):
+        raise ModuleNotFoundError("No module named 'torchaudio'", name="torchaudio")
+
+    monkeypatch.setattr(process_input_module.importlib, "import_module", fake_import_module)
+
+    with pytest.raises(RuntimeError, match="install_speechbrain_dependencies") as exc_info:
+        process_input_module.load_speechbrain_enhancer()
+
+    assert "Missing module: torchaudio" in str(exc_info.value)
+    assert "No module named 'torchaudio'" in str(exc_info.value)
 
 
 def test_load_speechbrain_enhancer_reports_import_runtime_errors(monkeypatch):
