@@ -857,6 +857,37 @@ def test_process_audio_segments_wraps_transcription_failures(tmp_path, monkeypat
     assert not (tmp_path / "temp_segment_1.wav").exists()
 
 
+def test_process_audio_segments_cleans_partial_json_when_write_fails(tmp_path, monkeypatch):
+    monkeypatch.setattr(process_input_module, "TMP_DIR", f"{tmp_path}{os.sep}")
+
+    input_audio = FakeInputAudio()
+
+    monkeypatch.setattr(process_input_module.whisper, "load_audio", lambda file_path: file_path)
+    monkeypatch.setattr(
+        process_input_module.whisper,
+        "transcribe",
+        lambda model, audio, language=None: {"segments": [{"start": 0.0, "end": 1.0, "text": "hello"}]},
+    )
+
+    def fake_json_dump(result, file, ensure_ascii=False, indent=None):
+        file.write('{"segments": [')
+        raise OSError("disk full")
+
+    monkeypatch.setattr(process_input_module.json, "dump", fake_json_dump)
+
+    with pytest.raises(OSError, match="disk full"):
+        process_input_module.process_audio_segments(
+            input_audio,
+            [(0, 2000)],
+            "en",
+            "fake-model",
+            f"{tmp_path}{os.sep}result_{{}}.json",
+        )
+
+    assert not (tmp_path / "result_000000_000002.json").exists()
+    assert not (tmp_path / "temp_segment_1.wav").exists()
+
+
 def test_process_audio_segments_cleans_partial_temp_file_when_export_fails(tmp_path, monkeypatch):
     monkeypatch.setattr(process_input_module, "TMP_DIR", f"{tmp_path}{os.sep}")
 

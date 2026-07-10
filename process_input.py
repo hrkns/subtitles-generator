@@ -366,6 +366,18 @@ def parse_segments(segments_str, total_duration_ms):
 def filter_zero_length_segments(segments):
     return [(start, end) for start, end in segments if start < end]
 
+def write_transcription_json(result, output_json_file):
+    try:
+        with open(output_json_file, 'w', encoding='utf-8') as file:
+            json.dump(result, file, ensure_ascii=False, indent=2)
+    except Exception:
+        if os.path.exists(output_json_file):
+            try:
+                os.remove(output_json_file)
+            except Exception:
+                logging.warning(f"Could not remove partial transcription JSON file {output_json_file}.", exc_info=True)
+        raise
+
 def process_audio_segments(input_audio, segments_to_process, audio_language, speech_to_text_model, output_json_template):
     # This function assumes the existence of a 'whisper' module and 'model' variable.
     # These are not standard Python or known third-party libraries as of the last update in 2022.
@@ -404,8 +416,7 @@ def process_audio_segments(input_audio, segments_to_process, audio_language, spe
 
             # Save the result to a JSON file
             output_json_file = output_json_template.format(format_ms_duration(segment_start) + "_" + format_ms_duration(segment_end))
-            with open(output_json_file, 'w', encoding='utf-8') as file:
-                json.dump(result, file, ensure_ascii=False, indent=2)
+            write_transcription_json(result, output_json_file)
             logging.info(f'Content has been written to the file {output_json_file}')
         finally:
             if os.path.exists(temp_audio_file):
