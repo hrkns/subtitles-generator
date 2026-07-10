@@ -546,15 +546,15 @@ def process_input(args):
     if not os.path.exists(TMP_DIR):
         os.makedirs(TMP_DIR)
 
+    # Prepare the normalized and optionally cleaned working audio used by transcription.
+    transcription_audio_path, input_audio = prepare_transcription_audio(input_path, cleaning_mode, already_resolved=True)
+    logging.info(f"Prepared transcription audio at {transcription_audio_path} using cleaning mode '{cleaning_mode}'.")
+
     if getattr(args, "save_cleaning_mode", False) and explicit_cleaning_mode is not None:
         try:
             persist_default_cleaning_mode(cleaning_mode, already_resolved=True)
         except Exception as e:
             logging.exception(f"Could not persist cleaning mode '{cleaning_mode}': {str(e)}")
-
-    # Prepare the normalized and optionally cleaned working audio used by transcription.
-    transcription_audio_path, input_audio = prepare_transcription_audio(input_path, cleaning_mode, already_resolved=True)
-    logging.info(f"Prepared transcription audio at {transcription_audio_path} using cleaning mode '{cleaning_mode}'.")
 
     # Get the total duration of the audio in milliseconds
     total_duration_ms = len(input_audio)

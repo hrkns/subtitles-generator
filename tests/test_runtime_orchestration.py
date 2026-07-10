@@ -236,7 +236,7 @@ def test_process_input_resolves_cleaning_mode_once_and_reuses_it_for_persistence
     tmp_dir = tmp_path / "tmp"
     monkeypatch.setattr(process_input_module, "TMP_DIR", f"{tmp_dir}{os.sep}")
 
-    calls = {"resolve_cleaning_mode": 0}
+    calls = {"resolve_cleaning_mode": 0, "events": []}
     fake_audio = FakeAudio(42000)
 
     def fake_resolve_cleaning_mode(explicit_cleaning_mode):
@@ -245,13 +245,16 @@ def test_process_input_resolves_cleaning_mode_once_and_reuses_it_for_persistence
         return "basic"
 
     def fake_save_cleaning_settings(default_cleaning_mode, preselect_saved_cleaning_mode=True):
+        calls["events"].append("save_cleaning_settings")
         calls["save_cleaning_settings"] = (default_cleaning_mode, preselect_saved_cleaning_mode)
 
     def fake_prepare_transcription_audio(input_path, cleaning_mode, already_resolved=False):
+        calls["events"].append("prepare_transcription_audio")
         calls["prepare_transcription_audio"] = (input_path, cleaning_mode, already_resolved)
         return (os.path.join(process_input_module.TMP_DIR, process_input_module.WORKING_AUDIO_FILENAME), fake_audio)
 
     def fake_process_audio_segments(input_audio, segments_to_process, audio_language, speech_to_text_model, output_json_template):
+        calls["events"].append("process_audio_segments")
         calls["process_audio_segments"] = (
             input_audio,
             segments_to_process,
@@ -286,6 +289,7 @@ def test_process_input_resolves_cleaning_mode_once_and_reuses_it_for_persistence
     process_input_module.process_input(args)
 
     assert calls["resolve_cleaning_mode"] == 1
+    assert calls["events"] == ["prepare_transcription_audio", "save_cleaning_settings", "process_audio_segments"]
     assert calls["save_cleaning_settings"] == ("basic", False)
     assert calls["prepare_transcription_audio"] == ("input.mp3", "basic", True)
     assert calls["process_audio_segments"] == (
@@ -295,6 +299,42 @@ def test_process_input_resolves_cleaning_mode_once_and_reuses_it_for_persistence
         "fake-model",
         os.path.join(process_input_module.TMP_DIR, "speech_recognition_result_segment_{}.json"),
     )
+
+
+def test_process_input_does_not_persist_cleaning_mode_when_preprocessing_fails(tmp_path, monkeypatch):
+    tmp_dir = tmp_path / "tmp"
+    monkeypatch.setattr(process_input_module, "TMP_DIR", f"{tmp_dir}{os.sep}")
+
+    calls = {}
+
+    def fake_prepare_transcription_audio(input_path, cleaning_mode, already_resolved=False):
+        calls["prepare_transcription_audio"] = (input_path, cleaning_mode, already_resolved)
+        raise RuntimeError("SpeechBrain enhancement is unavailable")
+
+    def fail_save_cleaning_settings(*_args, **_kwargs):
+        raise AssertionError("cleaning mode should not be persisted after preprocessing fails")
+
+    monkeypatch.setattr(process_input_module, "prepare_transcription_audio", fake_prepare_transcription_audio)
+    monkeypatch.setattr(process_input_module, "save_cleaning_settings", fail_save_cleaning_settings)
+    monkeypatch.setattr(
+        process_input_module.whisper,
+        "load_model",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("model should not load after preprocessing fails")),
+    )
+
+    args = SimpleNamespace(
+        input="input.mp3",
+        checkpoints=None,
+        segments=None,
+        language=None,
+        cleaning_mode="speechbrain",
+        save_cleaning_mode=True,
+    )
+
+    with pytest.raises(RuntimeError, match="SpeechBrain enhancement is unavailable"):
+        process_input_module.process_input(args)
+
+    assert calls["prepare_transcription_audio"] == ("input.mp3", "speechbrain", True)
 
 
 def test_process_input_continues_when_persisting_cleaning_mode_fails(tmp_path, monkeypatch, caplog):
