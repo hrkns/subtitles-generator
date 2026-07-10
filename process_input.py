@@ -429,7 +429,10 @@ def process_audio_segments(input_audio, segments_to_process, audio_language, spe
             logging.info(f'Content has been written to the file {output_json_file}')
         finally:
             if os.path.exists(temp_audio_file):
-                os.remove(temp_audio_file)
+                try:
+                    os.remove(temp_audio_file)
+                except Exception:
+                    logging.warning(f"Could not remove temporary audio segment file {temp_audio_file}.", exc_info=True)
 
         logging.info(f"Completed processing for segment {segment_number}")
 

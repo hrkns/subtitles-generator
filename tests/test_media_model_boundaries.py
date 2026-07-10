@@ -873,6 +873,37 @@ def test_process_audio_segments_wraps_transcription_failures(tmp_path, monkeypat
     assert not (tmp_path / "temp_segment_1.wav").exists()
 
 
+def test_process_audio_segments_preserves_transcription_error_when_temp_cleanup_fails(tmp_path, monkeypatch, caplog):
+    monkeypatch.setattr(process_input_module, "TMP_DIR", f"{tmp_path}{os.sep}")
+
+    input_audio = FakeInputAudio()
+
+    monkeypatch.setattr(process_input_module.whisper, "load_audio", lambda file_path: file_path)
+
+    def fake_transcribe(model, audio, language=None):
+        raise RuntimeError("transcription failed")
+
+    def fake_remove(file_path):
+        raise PermissionError("file is locked")
+
+    monkeypatch.setattr(process_input_module.whisper, "transcribe", fake_transcribe)
+    monkeypatch.setattr(process_input_module.os, "remove", fake_remove)
+
+    with caplog.at_level(logging.WARNING), pytest.raises(RuntimeError, match="audio segment #1: transcription failed") as exc_info:
+        process_input_module.process_audio_segments(
+            input_audio,
+            [(0, 2000)],
+            "en",
+            "fake-model",
+            f"{tmp_path}{os.sep}result_{{}}.json",
+        )
+
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
+    assert str(exc_info.value.__cause__) == "transcription failed"
+    assert "Could not remove temporary audio segment file" in caplog.text
+    assert "file is locked" in caplog.text
+
+
 def test_process_audio_segments_cleans_partial_json_when_write_fails(tmp_path, monkeypatch):
     monkeypatch.setattr(process_input_module, "TMP_DIR", f"{tmp_path}{os.sep}")
 
