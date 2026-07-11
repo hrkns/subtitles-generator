@@ -25,6 +25,8 @@ Subtitles Generator is a versatile tool designed to generate subtitles (SRT file
 
 - To enable the optional `speechbrain` cleaning mode, install the heavier enhancement stack by running either `install_speechbrain_dependencies.cmd` or `install_speechbrain_dependencies.sh`.
   - This optional install adds the SpeechBrain inference backend used by `--cleaning-mode speechbrain`.
+  - The optional stack is pinned in `requirements-speechbrain.txt` to `speechbrain==1.1.0`, `torch==2.11.0`, and `torchaudio==2.11.0` so repeated installs do not drift across incompatible Torch/Torchaudio wheel combinations.
+  - If you need a CUDA-specific Torch build, install a matching `torch`/`torchaudio` pair from the official PyTorch install matrix and keep both packages on the same version.
   - The application detects when this optional backend is missing and reports that `speechbrain` is unavailable instead of falling back silently or failing ambiguously.
   - Downloaded model assets are cached under `audio_cache/` and are not required when using `off` or `basic`.
 

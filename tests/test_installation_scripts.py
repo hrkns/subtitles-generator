@@ -61,6 +61,9 @@ def test_optional_install_scripts_install_only_speechbrain_stack():
     assert "optional SpeechBrain dependencies" in install_speechbrain_dependencies_cmd
     assert "install_dependencies.cmd" in install_speechbrain_dependencies_cmd
 
-    assert "torch" in speechbrain_requirements
-    assert "torchaudio" in speechbrain_requirements
-    assert "speechbrain" in speechbrain_requirements
+    assert "torch==2.11.0" in speechbrain_requirements
+    assert "torchaudio==2.11.0" in speechbrain_requirements
+    assert "speechbrain==1.1.0" in speechbrain_requirements
+    assert "\ntorch\n" not in speechbrain_requirements
+    assert "\ntorchaudio\n" not in speechbrain_requirements
+    assert "\nspeechbrain\n" not in speechbrain_requirements

@@ -1,5 +1,8 @@
 # Optional dependencies for the heavy SpeechBrain cleaning mode.
 # This stack is only required when using --cleaning-mode speechbrain.
-torch
-torchaudio
-speechbrain
+#
+# Keep torch and torchaudio on the same release. Their wheels are ABI-coupled,
+# and mismatched versions commonly fail during import on Windows.
+torch==2.11.0
+torchaudio==2.11.0
+speechbrain==1.1.0
