@@ -1,6 +1,7 @@
 whisper-timestamped
 pydub
-python-magic
+python-magic; platform_system != "Windows"
+python-magic-bin; platform_system == "Windows"
 moviepy
 PyQt5
 audioop-lts

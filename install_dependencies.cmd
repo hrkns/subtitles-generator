@@ -2,7 +2,7 @@
 setlocal
 
 echo Installing core dependencies for the default transcription pipeline and the off/basic cleaning modes...
-python -m pip install -r requirements.txt python-magic-bin
+python -m pip install -r requirements.txt
 if errorlevel 1 exit /b %errorlevel%
 
 echo.

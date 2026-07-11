@@ -13,7 +13,8 @@ def test_base_requirements_cover_default_runtime_and_lightweight_cleaning():
 
     assert "whisper-timestamped" in requirements
     assert "pydub" in requirements
-    assert "python-magic" in requirements
+    assert 'python-magic; platform_system != "Windows"' in requirements
+    assert 'python-magic-bin; platform_system == "Windows"' in requirements
     assert "moviepy" in requirements
     assert "PyQt5" in requirements
     assert "audioop-lts" in requirements
@@ -29,7 +30,8 @@ def test_base_install_scripts_point_to_optional_speechbrain_install():
     assert "off/basic cleaning modes" in install_dependencies_sh
 
     assert "requirements.txt" in install_dependencies_cmd
-    assert "python-magic-bin" in install_dependencies_cmd
+    assert "python -m pip install -r requirements.txt" in install_dependencies_cmd
+    assert "python-magic-bin" not in install_dependencies_cmd
     assert "install_speechbrain_dependencies.cmd" in install_dependencies_cmd
     assert "off/basic cleaning modes" in install_dependencies_cmd
 
