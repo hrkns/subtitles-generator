@@ -517,7 +517,7 @@ def test_main_runs_pipeline_and_cleans_tmp_dir(tmp_path, monkeypatch):
     ]
 
 
-def test_main_version_mode_skips_pipeline(tmp_path, monkeypatch):
+def test_main_version_mode_skips_pipeline(tmp_path, monkeypatch, caplog):
     tmp_dir = tmp_path / "tmp"
     calls = []
 
@@ -547,6 +547,8 @@ def test_main_version_mode_skips_pipeline(tmp_path, monkeypatch):
         lambda received_args: (_ for _ in ()).throw(AssertionError("generate_output should not run in version mode")),
     )
 
-    runpy.run_module("main", run_name="__main__")
+    with caplog.at_level(logging.INFO):
+        runpy.run_module("main", run_name="__main__")
 
     assert calls == ["start", "stop", "print_duration"]
+    assert f"Version {config.APP_VERSION}" in caplog.text
