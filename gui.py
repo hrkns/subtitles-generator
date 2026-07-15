@@ -3,6 +3,7 @@ import os
 import subprocess
 import importlib
 import logging
+import time
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QTextEdit, QLabel, QFileDialog, QMessageBox, QComboBox, QCheckBox
 from PyQt5.QtCore import pyqtSignal, QObject, QThread
@@ -17,6 +18,19 @@ CLEANING_PERFORMANCE_WARNING = (
     "Audio cleanup performance is still unstable and may vary depending on the platform where it is executed."
 )
 SPEECHBRAIN_ENHANCEMENT_MODULE = "speechbrain.inference.enhancement"
+DEFAULT_AUDIO_LANGUAGE = "en"
+DEFAULT_OUTPUT_WARNING = (
+    "Warning: No output file selected. A default file named "
+    f"{DEFAULT_AUDIO_LANGUAGE}_<timestamp>.srt will be generated in the same folder as the input file."
+)
+
+
+def build_default_output_path(input_path, language_code=DEFAULT_AUDIO_LANGUAGE, timestamp_ms=None):
+    if timestamp_ms is None:
+        timestamp_ms = int(time.time() * 1000)
+
+    output_filename = f"{language_code}_{timestamp_ms}.srt"
+    return os.path.join(os.path.dirname(input_path), output_filename)
 
 
 def is_missing_requested_module(error, requested_module):
@@ -137,6 +151,11 @@ class SubtitlesGeneratorGUI(QWidget):
         self.outputPathLabel = QLabel("Output File: Not Set")
         layout.addWidget(self.outputPathLabel)
 
+        self.outputSelectionWarningLabel = QLabel(DEFAULT_OUTPUT_WARNING)
+        if hasattr(self.outputSelectionWarningLabel, "setWordWrap"):
+            self.outputSelectionWarningLabel.setWordWrap(True)
+        layout.addWidget(self.outputSelectionWarningLabel)
+
         self.btnSelectOutput = QPushButton("Select Output File")
         self.btnSelectOutput.clicked.connect(self.select_output_file)
         layout.addWidget(self.btnSelectOutput)
@@ -175,6 +194,7 @@ class SubtitlesGeneratorGUI(QWidget):
         self.setLayout(layout)
 
         self.outputPath = ""
+        self.outputPathIsDefault = False
         self.selectedFile = ""
 
         self.appConfig = load_app_config()
@@ -366,7 +386,9 @@ class SubtitlesGeneratorGUI(QWidget):
             if not file_name.endswith('.srt'):
                 file_name += '.srt'
             self.outputPath = file_name
+            self.outputPathIsDefault = False
             self.outputPathLabel.setText(f"Output File: {file_name}")
+            self.outputSelectionWarningLabel.setText("")
             self.lastOutputPath = os.path.dirname(file_name)
             self.persist_runtime_preferences()
 
@@ -441,12 +463,25 @@ class SubtitlesGeneratorGUI(QWidget):
 
     def run_script(self):
         # Check for file selection
-        if not self.selectedFile or not self.outputPath:
-            self.logTextEdit.append("No input or output file selected.")
+        if not self.selectedFile:
+            self.logTextEdit.append("No input file selected.")
             return
-        else:
-            # Clear the log text edit and initialize it back
-            self.logTextEdit.clear()
+
+        # Clear the log text edit and initialize it back
+        self.logTextEdit.clear()
+
+        if not self.outputPath or self.outputPathIsDefault:
+            self.outputPath = build_default_output_path(self.selectedFile)
+            self.outputPathIsDefault = True
+            self.outputPathLabel.setText(f"Output File: {self.outputPath} (default)")
+            self.outputSelectionWarningLabel.setText(
+                "Warning: No output file was selected. The default output file will be generated at: "
+                f"{self.outputPath}"
+            )
+            self.logTextEdit.append(
+                "No output file selected. Subtitles will be generated at the default location: "
+                f"{self.outputPath}"
+            )
 
         if not self.validate_selected_cleaning_mode():
             return
