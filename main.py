@@ -1,7 +1,7 @@
 import logging
 import os
 import shutil
-from config import TMP_DIR
+from config import APP_VERSION, TMP_DIR
 from modules import Chronometer, execution_args
 from process_input import process_input
 from generate_output import generate_output
@@ -23,7 +23,7 @@ if __name__ == "__main__":
             process_input(args)
             generate_output(args)
         else:
-            logging.info("Version 0.1.0")
+            logging.info(f"Version {APP_VERSION}")
     except Exception as e:
         logging.error(f"An error occurred while running process: {str(e)}", exc_info=True)
     finally:

@@ -294,6 +294,7 @@ def test_select_output_file_appends_extension_and_updates_config(monkeypatch):
 
     assert widget.outputPath == "/tmp/output.srt"
     assert widget.outputPathLabel.text == "Output File: /tmp/output.srt"
+    assert widget.outputSelectionWarningLabel.text == ""
     assert widget.lastOutputPath == "/tmp"
     assert updates[-1] == {
         "last_input_path": "",
@@ -430,13 +431,55 @@ def test_cleaning_mode_status_reports_runtime_validation_for_available_speechbra
     assert widget.cleaningModeStatusLabel.text == SPEECHBRAIN_AVAILABLE_STATUS
 
 
-def test_run_script_requires_input_and_output(monkeypatch):
+def test_run_script_requires_input(monkeypatch):
     widget, _updates = create_widget(monkeypatch)
+
+    assert widget.outputSelectionWarningLabel.text == gui.DEFAULT_OUTPUT_WARNING
 
     widget.run_script()
 
-    assert widget.logTextEdit.lines == ["No input or output file selected."]
+    assert widget.logTextEdit.lines == ["No input file selected."]
     assert widget.btnRunScript.disabled is False
+
+
+def test_build_default_output_path_uses_input_directory_language_and_timestamp():
+    assert gui.build_default_output_path(
+        "/tmp/media/input.mp3",
+        language_code="en",
+        timestamp_ms=1784131892852,
+    ) == gui.os.path.join("/tmp/media", "en_1784131892852.srt")
+
+
+def test_run_script_uses_and_announces_default_output_when_none_is_selected(monkeypatch):
+    widget, _updates = create_widget(monkeypatch)
+    widget.selectedFile = "/tmp/media/input.mp3"
+    monkeypatch.setattr(gui.time, "time", lambda: 1784131892.852)
+
+    created = {}
+
+    def fake_worker_factory(command):
+        worker = FakeWorkerForGui(command)
+        created["worker"] = worker
+        return worker
+
+    monkeypatch.setattr(gui, "Worker", fake_worker_factory)
+    monkeypatch.setattr(gui, "QThread", FakeQThread)
+
+    widget.run_script()
+
+    expected_output = gui.os.path.join("/tmp/media", "en_1784131892852.srt")
+    assert widget.outputPath == expected_output
+    assert widget.outputPathIsDefault is True
+    assert widget.outputPathLabel.text == f"Output File: {expected_output} (default)"
+    assert widget.outputSelectionWarningLabel.text == (
+        "Warning: No output file was selected. The default output file will be generated at: "
+        f"{expected_output}"
+    )
+    assert widget.logTextEdit.lines == [
+        f"No output file selected. Subtitles will be generated at the default location: {expected_output}",
+        "Running script...",
+    ]
+    assert created["worker"].command[created["worker"].command.index("--output") + 1] == expected_output
 
 
 def test_run_script_starts_worker_and_disables_controls(monkeypatch):
